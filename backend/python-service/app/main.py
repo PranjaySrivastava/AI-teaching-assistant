@@ -8,7 +8,10 @@ from pydantic import BaseModel
 app = FastAPI(
     title="AI Teaching Assistant - Python Speech & ML Service",
     version="0.1.0",
-    description="Python backend service for AssemblyAI speech processing, Claude LLM integration, and visual generation",
+    description=(
+        "Python backend service for AssemblyAI speech processing, "
+        "Claude LLM integration, and visual generation"
+    ),
 )
 
 app.add_middleware(
