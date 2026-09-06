@@ -136,10 +136,10 @@ npm run format:check
 
 ## 👥 Team Structure & Roles
 
-- **Technical Lead / Backend Engineer**: Node.js API orchestration, AssemblyAI SDK, Claude & ElevenLabs pipelines.
-- **Frontend Engineer / UI Developer**: Next.js UI, Three.js 3D avatar rig, Web Audio API, Canvas algorithm visualizers.
-- **Content & Curriculum Developer**: DS&A curriculum, Q&A evaluation benchmarks, code snippets, visual scripts.
-- **AI Prompt Engineer / ML Specialist**: Claude system prompt engineering, phoneme extraction, expression mapping.
+- **Project Lead & AI/ML Engineer**: **Pranjay Srivastava** ([@PranjaySrivastava](https://github.com/PranjaySrivastava)) — Overall project architecture, Claude/LLM prompt orchestration, AssemblyAI domain vocabularies, and phoneme lip-sync mapping.
+- **Backend Engineer**: **Salil** ([@Salil-IND](https://github.com/Salil-IND)) — Node.js Express REST & WebSocket orchestration service, API streaming, and data persistence.
+- **Frontend Engineer**: **Gopal** ([@gopal45-dev](https://github.com/gopal45-dev)) — Next.js user interface, Three.js 3D avatar rendering, Web Audio API voice capture, and algorithm visualization canvas.
+- **Content & Curriculum Developer**: **Aaarav Bhatnagar** — DS&A curriculum design, 50+ Q&A benchmark dataset, visual animation specs, and multi-language code snippets.
 
 ---
 

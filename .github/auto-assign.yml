@@ -3,8 +3,9 @@ pullRequestOpened: true
 ignoreDraft: true
 
 reviewers:
-  - frontend-lead
-  - backend-lead
+  - PranjaySrivastava
+  - Salil-IND
+  - gopal45-dev
 
 requestReviewers: author
 

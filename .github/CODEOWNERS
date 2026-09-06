@@ -1,21 +1,20 @@
-# Global default
+# Global default (Project Lead)
 * @PranjaySrivastava
 
-# Role 1: Technical Lead / Backend
-/backend/ @PranjaySrivastava
-/scripts/ @PranjaySrivastava
+# Role 1: Backend Engineer (Salil-IND)
+/backend/ @Salil-IND
+/scripts/ @Salil-IND @PranjaySrivastava
 
-# Role 2: Frontend Engineer / UI Developer
-/frontend/ @frontend-lead
-/frontend/src/components/ @frontend-lead
+# Role 2: Frontend Engineer (gopal45-dev)
+/frontend/ @gopal45-dev
 
-# Role 3: Content & Curriculum Developer
-/content/ @content-lead
-/docs/ @content-lead
+# Role 3: Content & Curriculum Developer (Aaarav Bhatnagar)
+/content/ @PranjaySrivastava
+/docs/ @PranjaySrivastava
 
-# Role 4: AI Prompt Engineer / ML Specialist
-/ai-ml/ @ai-ml-lead
+# Role 4: Project Lead & AI-ML Engineer (PranjaySrivastava)
+/ai-ml/ @PranjaySrivastava
 
-# Core Project Files
+# Core Project Configuration
 *.md @PranjaySrivastava
 /package.json @PranjaySrivastava
