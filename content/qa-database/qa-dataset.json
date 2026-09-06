@@ -1,0 +1,60 @@
+{
+  "topics": [
+    {
+      "id": "quicksort",
+      "category": "sorting",
+      "difficulty": "medium",
+      "title": "QuickSort Algorithm",
+      "question": "How does QuickSort work and what is its average time complexity?",
+      "expectedAnswer": {
+        "summary": "QuickSort is a divide-and-conquer algorithm that selects a 'pivot' element and partitions the other elements into two sub-arrays according to whether they are less than or greater than the pivot.",
+        "timeComplexity": {
+          "best": "O(n log n)",
+          "average": "O(n log n)",
+          "worst": "O(n^2)"
+        },
+        "spaceComplexity": "O(log n)"
+      },
+      "visualScript": {
+        "type": "array_partition",
+        "description": "Show array elements with pivot highlighted in yellow, smaller elements moved to the left in cyan, and greater elements to the right in purple.",
+        "steps": [
+          { "action": "select_pivot", "index": 6, "value": 45 },
+          { "action": "compare", "left": 0, "right": 6 },
+          { "action": "partition", "leftRange": [0, 2], "rightRange": [3, 5] }
+        ]
+      },
+      "codeReferences": {
+        "python": "def quicksort(arr):\n    if len(arr) <= 1:\n        return arr\n    pivot = arr[len(arr) // 2]\n    left = [x for x in arr if x < pivot]\n    middle = [x for x in arr if x == pivot]\n    right = [x for x in arr if x > pivot]\n    return quicksort(left) + middle + quicksort(right)",
+        "javascript": "function quickSort(arr) {\n  if (arr.length <= 1) return arr;\n  const pivot = arr[Math.floor(arr.length / 2)];\n  const left = arr.filter(x => x < pivot);\n  const mid = arr.filter(x => x === pivot);\n  const right = arr.filter(x => x > pivot);\n  return [...quickSort(left), ...mid, ...quickSort(right)];\n}"
+      }
+    },
+    {
+      "id": "binary-search",
+      "category": "searching",
+      "difficulty": "easy",
+      "title": "Binary Search",
+      "question": "Explain Binary Search and why the array must be sorted.",
+      "expectedAnswer": {
+        "summary": "Binary Search repeatedly divides the search interval in half. It only works on sorted arrays because the ordering guarantees whether the target lies in the left or right half.",
+        "timeComplexity": {
+          "best": "O(1)",
+          "average": "O(log n)",
+          "worst": "O(log n)"
+        },
+        "spaceComplexity": "O(1)"
+      },
+      "visualScript": {
+        "type": "binary_search_pointers",
+        "description": "Render array with low, mid, and high pointers adjusting at each step.",
+        "steps": [
+          { "action": "init_pointers", "low": 0, "mid": 3, "high": 6 },
+          { "action": "compare_target", "target": 23, "midValue": 34 }
+        ]
+      },
+      "codeReferences": {
+        "python": "def binary_search(arr, target):\n    low, high = 0, len(arr) - 1\n    while low <= high:\n        mid = (low + high) // 2\n        if arr[mid] == target:\n            return mid\n        elif arr[mid] < target:\n            low = mid + 1\n        else:\n            high = mid - 1\n    return -1"
+      }
+    }
+  ]
+}

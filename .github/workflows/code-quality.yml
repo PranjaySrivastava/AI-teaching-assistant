@@ -1,0 +1,91 @@
+name: Code Quality & Security
+
+on:
+  pull_request:
+
+jobs:
+  # ========== CODE QUALITY WITH SONARCLOUD ==========
+  sonarcloud:
+    name: SonarCloud Analysis
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    if: "${{ env.SONARCLOUD_TOKEN != '' }}"
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONARCLOUD_TOKEN: ${{ secrets.SONARCLOUD_TOKEN }}
+        with:
+          args: >
+            -Dsonar.projectKey=ai-teaching-assistant
+            -Dsonar.organization=your-org
+
+  # ========== CODEQL SECURITY ANALYSIS ==========
+  codeql:
+    name: CodeQL Security Analysis
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        language: ['javascript', 'python']
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v2
+        with:
+          languages: ${{ matrix.language }}
+      
+      - name: AutoBuild
+        uses: github/codeql-action/autobuild@v2
+      
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v2
+
+  # ========== DEPENDENCY SCANNING ==========
+  dependabot:
+    name: Dependency Vulnerabilities
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      
+      - name: Check Frontend Dependencies
+        run: |
+          cd frontend
+          npm audit --audit-level=moderate || true
+      
+      - name: Check Backend Dependencies
+        run: |
+          pip install safety
+          safety check --json backend/python-service/requirements.txt || true
+
+  # ========== SNYK SCANNING ==========
+  snyk:
+    name: Snyk Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Run Snyk
+        uses: snyk/actions/setup@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      
+      - name: Snyk Test
+        run: |
+          snyk test --file=frontend/package.json || true
+          snyk test --file=backend/node-service/package.json || true

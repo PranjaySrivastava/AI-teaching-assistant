@@ -1,0 +1,41 @@
+{
+  "sentiments": {
+    "thinking": {
+      "eye_gaze": "up_left",
+      "head_tilt_degrees": 5.0,
+      "blendshape_weights": {
+        "browInnerUp": 0.4,
+        "mouthPucker": 0.2
+      }
+    },
+    "explaining": {
+      "eye_gaze": "direct",
+      "head_tilt_degrees": 0.0,
+      "blendshape_weights": {
+        "browOuterUpLeft": 0.2,
+        "browOuterUpRight": 0.2
+      }
+    },
+    "encouraging": {
+      "eye_gaze": "direct",
+      "head_tilt_degrees": -3.0,
+      "blendshape_weights": {
+        "mouthSmileLeft": 0.6,
+        "mouthSmileRight": 0.6,
+        "eyeWideLeft": 0.2,
+        "eyeWideRight": 0.2
+      }
+    }
+  },
+  "phoneme_to_viseme": {
+    "AA": "viseme_aa",
+    "EE": "viseme_ee",
+    "IH": "viseme_ih",
+    "OH": "viseme_oh",
+    "OU": "viseme_ou",
+    "PP": "viseme_pp",
+    "SS": "viseme_ss",
+    "TH": "viseme_th",
+    "FF": "viseme_ff"
+  }
+}

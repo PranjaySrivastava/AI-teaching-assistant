@@ -1,0 +1,125 @@
+name: PR Checks - Linting & Format
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'frontend/**'
+      - 'backend/**'
+      - '.github/workflows/pr-checks.yml'
+
+jobs:
+  # ========== FRONTEND LINTING ==========
+  lint-frontend:
+    name: Frontend Lint & Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'frontend/package-lock.json'
+      
+      - name: Install Dependencies
+        run: cd frontend && npm ci
+      
+      - name: ESLint Check
+        run: cd frontend && npm run lint --if-present
+        continue-on-error: false
+      
+      - name: Prettier Format Check
+        run: cd frontend && npm run format:check --if-present
+        continue-on-error: false
+
+  # ========== BACKEND (PYTHON) LINTING ==========
+  lint-python:
+    name: Python Backend Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+      
+      - name: Install Dependencies
+        run: |
+          pip install flake8 black isort
+          pip install -r backend/python-service/requirements.txt
+      
+      - name: Flake8 Check
+        run: flake8 backend/python-service --max-line-length=100 --extend-ignore=E203,W503
+        continue-on-error: false
+      
+      - name: Black Format Check
+        run: black --check backend/python-service
+        continue-on-error: false
+      
+      - name: isort Import Check
+        run: isort --check-only backend/python-service
+        continue-on-error: false
+
+  # ========== BACKEND (NODE) LINTING ==========
+  lint-node-backend:
+    name: Node Backend Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'backend/node-service/package-lock.json'
+      
+      - name: Install Dependencies
+        run: cd backend/node-service && npm ci
+      
+      - name: ESLint Check
+        run: cd backend/node-service && npm run lint --if-present
+        continue-on-error: false
+
+  # ========== TYPESCRIPT TYPE CHECKING ==========
+  type-check:
+    name: TypeScript Type Checking
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'frontend/package-lock.json'
+      
+      - name: Install Dependencies
+        run: cd frontend && npm ci
+      
+      - name: TypeScript Check
+        run: cd frontend && npm run type-check --if-present
+        continue-on-error: false
+
+  # ========== SUMMARY ==========
+  pr-checks-summary:
+    name: PR Checks Summary
+    needs: [lint-frontend, lint-python, lint-node-backend, type-check]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Check Job Statuses
+        run: |
+          if [ "${{ needs.lint-frontend.result }}" != "success" ] || \
+             [ "${{ needs.lint-python.result }}" != "success" ] || \
+             [ "${{ needs.lint-node-backend.result }}" != "success" ] || \
+             [ "${{ needs.type-check.result }}" != "success" ]; then
+            echo "❌ Some checks failed"
+            exit 1
+          fi
+          echo "✅ All checks passed!"

@@ -1,0 +1,21 @@
+# Global default
+* @PranjaySrivastava
+
+# Role 1: Technical Lead / Backend
+/backend/ @PranjaySrivastava
+/scripts/ @PranjaySrivastava
+
+# Role 2: Frontend Engineer / UI Developer
+/frontend/ @frontend-lead
+/frontend/src/components/ @frontend-lead
+
+# Role 3: Content & Curriculum Developer
+/content/ @content-lead
+/docs/ @content-lead
+
+# Role 4: AI Prompt Engineer / ML Specialist
+/ai-ml/ @ai-ml-lead
+
+# Core Project Files
+*.md @PranjaySrivastava
+/package.json @PranjaySrivastava

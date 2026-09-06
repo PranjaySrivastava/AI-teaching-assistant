@@ -1,0 +1,15 @@
+# Auto assignment of reviewers based on PR labels
+pullRequestOpened: true
+ignoreDraft: true
+
+reviewers:
+  - frontend-lead
+  - backend-lead
+
+requestReviewers: author
+
+numberOfReviewers: 2
+
+skipKeywords:
+  - wip
+  - draft

@@ -1,0 +1,36 @@
+{
+  "scenarios": [
+    {
+      "id": "scenario-01",
+      "name": "Basic QuickSort Explanation",
+      "user_input": "Hey, explain how QuickSort works with a simple example",
+      "expected_concepts": ["partition", "pivot", "divide-and-conquer"],
+      "expected_visual_type": "sorting",
+      "max_latency_seconds": 2.0
+    },
+    {
+      "id": "scenario-02",
+      "name": "Follow-Up Worst Case Complexity",
+      "user_input": "What if the array is already sorted?",
+      "expected_concepts": ["O(n^2)", "unbalanced partition"],
+      "expected_visual_type": "sorting",
+      "max_latency_seconds": 2.0
+    },
+    {
+      "id": "scenario-03",
+      "name": "Graph Traversal BFS vs DFS",
+      "user_input": "How is BFS different from DFS?",
+      "expected_concepts": ["queue", "stack", "level-order", "backtracking"],
+      "expected_visual_type": "graph",
+      "max_latency_seconds": 2.0
+    },
+    {
+      "id": "scenario-04",
+      "name": "Out of Scope Redirection",
+      "user_input": "What is the capital of France?",
+      "expected_concepts": ["redirect to DS&A", "polite response"],
+      "expected_visual_type": null,
+      "max_latency_seconds": 1.5
+    }
+  ]
+}

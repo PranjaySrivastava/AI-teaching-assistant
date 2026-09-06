@@ -1,0 +1,25 @@
+{
+  "name": "ai-teaching-assistant",
+  "version": "0.1.0",
+  "description": "AI Teaching Assistant with Voice Agent & 3D Avatar",
+  "license": "MIT",
+  "workspaces": [
+    "frontend",
+    "backend/node-service"
+  ],
+  "scripts": {
+    "install-all": "npm install && npm --prefix frontend install && npm --prefix backend/node-service install && pip install -r backend/python-service/requirements.txt",
+    "dev": "npm run dev --prefix frontend",
+    "dev:all": "concurrently \"npm run dev --prefix frontend\" \"npm run dev --prefix backend/node-service\"",
+    "test": "npm test --prefix frontend && npm test --prefix backend/node-service",
+    "test:all": "npm test --prefix frontend && npm test --prefix backend/node-service && pytest backend/python-service/tests",
+    "lint": "npm run lint --prefix frontend && npm run lint --prefix backend/node-service",
+    "type-check": "npm run type-check --prefix frontend",
+    "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,md,css}\"",
+    "format:check": "prettier --check \"**/*.{js,jsx,ts,tsx,json,md,css}\"",
+    "build": "npm run build --prefix frontend"
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3"
+  }
+}

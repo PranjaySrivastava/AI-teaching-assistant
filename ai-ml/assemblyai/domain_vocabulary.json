@@ -1,0 +1,33 @@
+{
+  "word_boost": [
+    "QuickSort",
+    "MergeSort",
+    "BubbleSort",
+    "Dijkstra",
+    "Bellman-Ford",
+    "Kruskal",
+    "Prim",
+    "Breadth-First Search",
+    "Depth-First Search",
+    "BFS",
+    "DFS",
+    "AVL Tree",
+    "Red-Black Tree",
+    "B-Tree",
+    "Trie",
+    "HeapSort",
+    "Adjacency Matrix",
+    "Adjacency List",
+    "Memoization",
+    "Dynamic Programming",
+    "Big-O",
+    "O(n log n)",
+    "Amortized Complexity",
+    "Linked List",
+    "Binary Search Tree",
+    "Two Pointers",
+    "Sliding Window"
+  ],
+  "boost_param": "high",
+  "language_code": "en_us"
+}
