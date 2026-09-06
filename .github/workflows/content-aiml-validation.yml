@@ -1,0 +1,48 @@
+name: Content & AI-ML Validation
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main]
+
+jobs:
+  detect-changes:
+    name: Detect Content & AI-ML Changes
+    runs-on: ubuntu-latest
+    outputs:
+      content_or_aiml: ${{ steps.filter.outputs.content_or_aiml }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for Content & AI-ML Changes
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            content_or_aiml:
+              - 'content/**'
+              - 'ai-ml/**'
+              - 'scripts/validate-content-aiml.js'
+              - '.github/workflows/content-aiml-validation.yml'
+
+  validate:
+    name: Content & AI-ML Integrity Check
+    needs: detect-changes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Skip Check
+        if: needs.detect-changes.outputs.content_or_aiml != 'true'
+        run: echo "⏩ No Content or AI-ML changes detected. Skipping validation."
+
+      - name: Setup Node.js
+        if: needs.detect-changes.outputs.content_or_aiml == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run Integrity Validation
+        if: needs.detect-changes.outputs.content_or_aiml == 'true'
+        run: node scripts/validate-content-aiml.js

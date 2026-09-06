@@ -2,23 +2,48 @@ name: Backend Tests
 
 on:
   pull_request:
-    paths:
-      - 'backend/**'
-      - '.github/workflows/backend-tests.yml'
+    branches: [main, develop]
   push:
     branches: [main]
-    paths:
-      - 'backend/**'
 
 jobs:
+  detect-changes:
+    name: Detect Backend Changes
+    runs-on: ubuntu-latest
+    outputs:
+      node: ${{ steps.filter.outputs.node }}
+      python: ${{ steps.filter.outputs.python }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for Backend Changes
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            node:
+              - 'backend/node-service/**'
+              - 'package.json'
+              - 'package-lock.json'
+              - '.github/workflows/backend-tests.yml'
+            python:
+              - 'backend/python-service/**'
+              - '.github/workflows/backend-tests.yml'
+
   # ========== NODE BACKEND TESTS ==========
   test-node:
     name: Node Backend Tests
+    needs: detect-changes
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
+      - name: Skip Check
+        if: needs.detect-changes.outputs.node != 'true'
+        run: echo "⏩ No Node backend changes detected. Skipping tests."
+
       - name: Setup Node.js
+        if: needs.detect-changes.outputs.node == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -26,28 +51,38 @@ jobs:
           cache-dependency-path: 'package-lock.json'
 
       - name: Install Monorepo Dependencies
+        if: needs.detect-changes.outputs.node == 'true'
         run: npm ci
 
       - name: Run Jest Unit Tests
+        if: needs.detect-changes.outputs.node == 'true'
         run: npm test --prefix backend/node-service
 
   # ========== PYTHON BACKEND TESTS ==========
   test-python:
     name: Python Backend Tests
+    needs: detect-changes
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
+      - name: Skip Check
+        if: needs.detect-changes.outputs.python != 'true'
+        run: echo "⏩ No Python backend changes detected. Skipping tests."
+
       - name: Setup Python
+        if: needs.detect-changes.outputs.python == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: 'pip'
 
       - name: Install Python Dependencies
+        if: needs.detect-changes.outputs.python == 'true'
         run: |
           pip install -r backend/python-service/requirements.txt
           pip install pytest pytest-cov pytest-asyncio
 
       - name: Run Pytest Tests
+        if: needs.detect-changes.outputs.python == 'true'
         run: pytest backend/python-service/tests/ -v

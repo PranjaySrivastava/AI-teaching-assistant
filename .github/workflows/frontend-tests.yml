@@ -2,23 +2,44 @@ name: Frontend Tests
 
 on:
   pull_request:
-    paths:
-      - 'frontend/**'
-      - '.github/workflows/frontend-tests.yml'
+    branches: [main, develop]
   push:
     branches: [main]
-    paths:
-      - 'frontend/**'
 
 jobs:
+  detect-changes:
+    name: Detect Frontend Changes
+    runs-on: ubuntu-latest
+    outputs:
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for Frontend Changes
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            frontend:
+              - 'frontend/**'
+              - 'package.json'
+              - 'package-lock.json'
+              - '.github/workflows/frontend-tests.yml'
+
   # ========== FRONTEND TESTS & BUILD ==========
   test-and-build:
     name: Frontend Unit Tests & Build
+    needs: detect-changes
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
+      - name: Skip Check
+        if: needs.detect-changes.outputs.frontend != 'true'
+        run: echo "⏩ No Frontend changes detected. Skipping tests and build."
+
       - name: Setup Node.js
+        if: needs.detect-changes.outputs.frontend == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -26,15 +47,19 @@ jobs:
           cache-dependency-path: 'package-lock.json'
 
       - name: Install Monorepo Dependencies
+        if: needs.detect-changes.outputs.frontend == 'true'
         run: npm ci
 
       - name: Run Jest Unit Tests
+        if: needs.detect-changes.outputs.frontend == 'true'
         run: npm test --prefix frontend
 
       - name: Build Next.js Production App
+        if: needs.detect-changes.outputs.frontend == 'true'
         run: npm run build --prefix frontend
 
       - name: Upload Build Artifact
+        if: needs.detect-changes.outputs.frontend == 'true'
         uses: actions/upload-artifact@v4
         continue-on-error: true
         with:

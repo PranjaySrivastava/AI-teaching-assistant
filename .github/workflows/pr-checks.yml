@@ -7,9 +7,34 @@ on:
     branches: [main]
 
 jobs:
+  detect-changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      python: ${{ steps.filter.outputs.python }}
+      node: ${{ steps.filter.outputs.node }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check Changed Paths
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            python:
+              - 'backend/python-service/**'
+              - '.github/workflows/pr-checks.yml'
+            node:
+              - 'frontend/**'
+              - 'backend/node-service/**'
+              - 'package.json'
+              - 'package-lock.json'
+              - '.github/workflows/pr-checks.yml'
+
   # ========== CODE QUALITY & TYPE CHECK ==========
   lint-and-typecheck:
     name: Lint & Type Checking
+    needs: detect-changes
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,40 +49,52 @@ jobs:
       - name: Install Monorepo Dependencies
         run: npm ci
 
-      - name: ESLint Check (Frontend & Node Backend)
-        run: npm run lint
-
-      - name: Prettier Format Check
+      - name: Prettier Format Check (All Files)
         run: npm run format:check
 
+      - name: ESLint Check (Frontend & Node Backend)
+        if: needs.detect-changes.outputs.node == 'true'
+        run: npm run lint
+
       - name: TypeScript Type Check (Frontend)
+        if: needs.detect-changes.outputs.node == 'true'
         run: npm run type-check
 
   # ========== PYTHON BACKEND LINTING ==========
   lint-python:
     name: Python Linting
+    needs: detect-changes
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
+      - name: Skip Check
+        if: needs.detect-changes.outputs.python != 'true'
+        run: echo "⏩ No Python changes detected. Skipping Python linting."
+
       - name: Setup Python
+        if: needs.detect-changes.outputs.python == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: 'pip'
 
       - name: Install Python Linters
+        if: needs.detect-changes.outputs.python == 'true'
         run: |
           pip install flake8 black isort
           pip install -r backend/python-service/requirements.txt
 
       - name: Flake8 Check
+        if: needs.detect-changes.outputs.python == 'true'
         run: flake8 backend/python-service --max-line-length=100 --extend-ignore=E203,W503
 
       - name: Black Format Check
+        if: needs.detect-changes.outputs.python == 'true'
         run: black --check backend/python-service
 
       - name: isort Import Check
+        if: needs.detect-changes.outputs.python == 'true'
         run: isort --check-only backend/python-service
 
   # ========== SUMMARY ==========
