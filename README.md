@@ -1,9 +1,27 @@
-# AI Teaching Assistant: Voice-First Interactive Learning
+<div align="center">
 
-> **AssemblyAI Voice Agent Hackathon Project**  
-> An interactive voice-based avatar learning platform that transforms Data Structures & Algorithms learning through real-time voice interaction, 3D avatar animations, and synchronized algorithm visual explanations.
+# 🎓 AI Teaching Assistant
+
+### Interactive Voice-First 3D Avatar Learning Platform for DS&A
+
+[![CI - PR Checks](https://img.shields.io/badge/CI-Passing-10b981?style=for-the-badge&logo=githubactions&logoColor=white)](.github/workflows/pr-checks.yml)
+[![Next.js](https://img.shields.io/badge/Next.js-14.2-black?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-20.x-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.5-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![AssemblyAI](https://img.shields.io/badge/AssemblyAI-Voice%20Agent-6842FF?style=for-the-badge&logo=soundcharts&logoColor=white)](https://www.assemblyai.com/)
+[![Code Style: Prettier](https://img.shields.io/badge/Code%20Style-Prettier-ff69b4?style=for-the-badge&logo=prettier&logoColor=white)](https://prettier.io/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)](LICENSE)
+
+<p align="center">
+  <b>Built for the AssemblyAI Voice Agent Hackathon</b><br>
+  Transforming Data Structures & Algorithms learning with real-time speech transcription, intelligent LLM reasoning, 3D animated lip-sync, and synchronized step-by-step algorithm visualizations.
+</p>
+
+[Explore Architecture](#-system-architecture) • [Quick Start](#-quick-start) • [Team Roles](#-team-structure--roles) • [Docs](docs/) • [Contribution Guidelines](docs/CONTRIBUTING.md)
 
 ---
+
+</div>
 
 ## 🎯 The Core Concept
 
