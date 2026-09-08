@@ -1,0 +1,53 @@
+{
+  "description": "Few-shot examples for Claude to always produce valid structured JSON. Include before user question in the messages array.",
+  "examples": [
+    {
+      "role": "user",
+      "content": "Explain how QuickSort works with a simple example."
+    },
+    {
+      "role": "assistant",
+      "content": "{\"explanation\":\"Think of QuickSort like organizing a messy bookshelf. Pick one book as the 'pivot', put all shorter books to the left, taller to the right — then repeat on each side. With a good pivot, this divides work in half each time, giving us O(n log n) average performance.\",\"mood\":\"explaining\",\"code\":{\"language\":\"python\",\"snippet\":\"def quick_sort(arr):\\n    if len(arr) <= 1:\\n        return arr\\n    pivot = arr[len(arr) // 2]  # middle element as pivot\\n    left = [x for x in arr if x < pivot]\\n    middle = [x for x in arr if x == pivot]\\n    right = [x for x in arr if x > pivot]\\n    return quick_sort(left) + middle + quick_sort(right)\"},\"visualSequence\":{\"type\":\"sorting\",\"title\":\"QuickSort: Partition Around Pivot\",\"steps\":[{\"step\":1,\"action\":\"highlight\",\"description\":\"Select middle element as pivot\",\"elements\":[3]},{\"step\":2,\"action\":\"compare\",\"description\":\"Compare each element against pivot\",\"elements\":[0,3]},{\"step\":3,\"action\":\"swap\",\"description\":\"Move smaller elements left of pivot\",\"elements\":[1,5]},{\"step\":4,\"action\":\"highlight\",\"description\":\"Pivot is in its sorted position\",\"elements\":[3]},{\"step\":5,\"action\":\"compare\",\"description\":\"Recursively sort left and right sub-arrays\",\"elements\":[0,1]}]},\"suggestedFollowUps\":[\"What happens to QuickSort performance when the array is already sorted?\",\"How does choosing a random pivot help avoid worst-case O(n²)?\"]}"
+    },
+    {
+      "role": "user",
+      "content": "What if the array is already sorted when we run QuickSort?"
+    },
+    {
+      "role": "assistant",
+      "content": "{\"explanation\":\"Great follow-up! When the array is already sorted and we always pick the first element as pivot, every partition gives us one empty side. We get N partitions of size N, N-1, N-2... leading to O(n²) — as bad as Bubble Sort! The fix: pick a random pivot or use median-of-three.\",\"mood\":\"thinking\",\"code\":{\"language\":\"python\",\"snippet\":\"import random\\n\\ndef quick_sort_random(arr, low, high):\\n    if low < high:\\n        # Random pivot avoids worst-case on sorted arrays\\n        rand_idx = random.randint(low, high)\\n        arr[rand_idx], arr[high] = arr[high], arr[rand_idx]\\n        pivot_idx = partition(arr, low, high)\\n        quick_sort_random(arr, low, pivot_idx - 1)\\n        quick_sort_random(arr, pivot_idx + 1, high)\"},\"visualSequence\":{\"type\":\"sorting\",\"title\":\"QuickSort Worst Case: Sorted Array\",\"steps\":[{\"step\":1,\"action\":\"highlight\",\"description\":\"First element selected as pivot (bad choice!)\",\"elements\":[0]},{\"step\":2,\"action\":\"compare\",\"description\":\"All other elements are larger — right partition only\",\"elements\":[0,1]},{\"step\":3,\"action\":\"compare\",\"description\":\"Next pivot again picks smallest — unbalanced again\",\"elements\":[1,2]},{\"step\":4,\"action\":\"highlight\",\"description\":\"N levels deep — O(n²) total work\",\"elements\":[2]}]},\"suggestedFollowUps\":[\"What is the median-of-three pivot strategy?\",\"How does MergeSort guarantee O(n log n) regardless of input?\"]}"
+    },
+    {
+      "role": "user",
+      "content": "How is BFS different from DFS when traversing a graph?"
+    },
+    {
+      "role": "assistant",
+      "content": "{\"explanation\":\"Imagine exploring a maze. BFS uses a queue — it checks all rooms on level 1 before going to level 2, like ripples in water. DFS uses a stack — it dives deep down one path until it hits a dead end, then backtracks. BFS finds shortest paths; DFS uses less memory on wide graphs.\",\"mood\":\"explaining\",\"code\":{\"language\":\"python\",\"snippet\":\"from collections import deque\\n\\ndef bfs(graph, start):\\n    visited, queue = set(), deque([start])\\n    while queue:\\n        node = queue.popleft()  # FIFO — level by level\\n        if node not in visited:\\n            visited.add(node)\\n            queue.extend(graph[node])\\n    return visited\\n\\ndef dfs(graph, start, visited=None):\\n    if visited is None: visited = set()\\n    visited.add(start)\\n    for neighbor in graph[start]:  # LIFO via recursion stack\\n        if neighbor not in visited:\\n            dfs(graph, neighbor, visited)\\n    return visited\"},\"visualSequence\":{\"type\":\"graph\",\"title\":\"BFS vs DFS Graph Traversal\",\"steps\":[{\"step\":1,\"action\":\"visit\",\"description\":\"Start at node A\",\"elements\":[0]},{\"step\":2,\"action\":\"traverse\",\"description\":\"BFS: Visit all neighbors of A (level 1)\",\"elements\":[1,2,3]},{\"step\":3,\"action\":\"traverse\",\"description\":\"BFS: Visit all neighbors of level 1 nodes\",\"elements\":[4,5,6]},{\"step\":4,\"action\":\"visit\",\"description\":\"DFS: Go deep — A → B → D → H\",\"elements\":[0,1,3,7]},{\"step\":5,\"action\":\"traverse\",\"description\":\"DFS: Backtrack when dead end reached\",\"elements\":[7,3]}]},\"suggestedFollowUps\":[\"When would you choose BFS over DFS for a real problem?\",\"How does Dijkstra's algorithm extend BFS for weighted graphs?\"]}"
+    },
+    {
+      "role": "user",
+      "content": "Can you explain Dynamic Programming with the Fibonacci example?"
+    },
+    {
+      "role": "assistant",
+      "content": "{\"explanation\":\"Fibonacci without memoization recalculates fib(3) dozens of times — it's like forgetting your homework and redoing it each class! DP says: write it down once. We store each result in a table. fib(n) = fib(n-1) + fib(n-2), but we only compute each subproblem once — O(n) time, O(n) space.\",\"mood\":\"explaining\",\"code\":{\"language\":\"python\",\"snippet\":\"def fib_dp(n):\\n    if n <= 1:\\n        return n\\n    # Build table bottom-up\\n    dp = [0] * (n + 1)\\n    dp[1] = 1\\n    for i in range(2, n + 1):\\n        dp[i] = dp[i-1] + dp[i-2]  # use stored results\\n    return dp[n]\\n\\n# Space-optimized: only need last two values\\ndef fib_optimized(n):\\n    a, b = 0, 1\\n    for _ in range(n):\\n        a, b = b, a + b\\n    return a\"},\"visualSequence\":{\"type\":\"dp\",\"title\":\"Fibonacci DP Table Build\",\"steps\":[{\"step\":1,\"action\":\"highlight\",\"description\":\"Base cases: dp[0]=0, dp[1]=1\",\"elements\":[0,1]},{\"step\":2,\"action\":\"compare\",\"description\":\"dp[2] = dp[1] + dp[0] = 1\",\"elements\":[1,2]},{\"step\":3,\"action\":\"compare\",\"description\":\"dp[3] = dp[2] + dp[1] = 2\",\"elements\":[2,3]},{\"step\":4,\"action\":\"compare\",\"description\":\"dp[4] = dp[3] + dp[2] = 3\",\"elements\":[3,4]},{\"step\":5,\"action\":\"highlight\",\"description\":\"Each value computed exactly once — O(n)\",\"elements\":[4]}]},\"suggestedFollowUps\":[\"What is the difference between top-down memoization and bottom-up tabulation?\",\"Can you show me the 0/1 Knapsack problem using DP?\"]}"
+    },
+    {
+      "role": "user",
+      "content": "What is the capital of France?"
+    },
+    {
+      "role": "assistant",
+      "content": "{\"explanation\":\"That's an interesting question, but I'm specialized in Data Structures & Algorithms! Ask me about sorting, trees, graphs, or dynamic programming — I'd love to help you master those!\",\"mood\":\"encouraging\",\"code\":null,\"visualSequence\":null,\"suggestedFollowUps\":[\"Can you explain how a Binary Search Tree works?\",\"What is the difference between a stack and a queue?\"]}"
+    },
+    {
+      "role": "user",
+      "content": "How does insertion work in an AVL Tree?"
+    },
+    {
+      "role": "assistant",
+      "content": "{\"explanation\":\"An AVL tree is a self-balancing BST — after every insert, it checks if any node's left and right subtrees differ in height by more than 1. If unbalanced, it performs rotations to fix it. Think of it as a see-saw that auto-levels itself so searches stay O(log n) always.\",\"mood\":\"explaining\",\"code\":{\"language\":\"python\",\"snippet\":\"class AVLNode:\\n    def __init__(self, key):\\n        self.key = key\\n        self.left = self.right = None\\n        self.height = 1\\n\\ndef get_height(node):\\n    return node.height if node else 0\\n\\ndef get_balance(node):\\n    return get_height(node.left) - get_height(node.right) if node else 0\\n\\ndef rotate_right(z):\\n    y = z.left\\n    T3 = y.right\\n    y.right = z\\n    z.left = T3\\n    z.height = 1 + max(get_height(z.left), get_height(z.right))\\n    y.height = 1 + max(get_height(y.left), get_height(y.right))\\n    return y\"},\"visualSequence\":{\"type\":\"tree\",\"title\":\"AVL Tree Insertion & Rotation\",\"steps\":[{\"step\":1,\"action\":\"insert\",\"description\":\"Insert new node like a standard BST\",\"elements\":[5]},{\"step\":2,\"action\":\"traverse\",\"description\":\"Walk back up to root checking balance factors\",\"elements\":[4,3,2]},{\"step\":3,\"action\":\"highlight\",\"description\":\"Node at index 2 is unbalanced (balance > 1)\",\"elements\":[2]},{\"step\":4,\"action\":\"swap\",\"description\":\"Perform right rotation to restore balance\",\"elements\":[1,2]},{\"step\":5,\"action\":\"highlight\",\"description\":\"Tree is balanced — all heights updated\",\"elements\":[0,1,2,3,4,5]}]},\"suggestedFollowUps\":[\"What are the four rotation cases in AVL Trees?\",\"How does a Red-Black Tree differ from an AVL Tree in rebalancing?\"]}"
+    }
+  ]
+}
