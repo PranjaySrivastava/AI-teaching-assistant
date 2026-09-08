@@ -1,41 +1,159 @@
 {
+  "_comment": "Full phoneme-to-viseme mapping and sentiment blendshape weights for Three.js avatar. Designed for ARKit 52-blendshape face model.",
+
   "sentiments": {
+    "idle": {
+      "_description": "Neutral resting pose — used between responses",
+      "eye_gaze": "forward",
+      "head_tilt_degrees": 0.0,
+      "blink_rate_per_minute": 15,
+      "blendshape_weights": {
+        "mouthClose": 1.0,
+        "eyeBlinkLeft": 0.05,
+        "eyeBlinkRight": 0.05
+      },
+      "gesture_animation": "idle_breathing"
+    },
     "thinking": {
+      "_description": "Professor Ada working through a complex derivation",
       "eye_gaze": "up_left",
       "head_tilt_degrees": 5.0,
+      "blink_rate_per_minute": 8,
       "blendshape_weights": {
         "browInnerUp": 0.4,
-        "mouthPucker": 0.2
-      }
+        "browDownLeft": 0.1,
+        "browDownRight": 0.1,
+        "mouthPucker": 0.2,
+        "mouthStretchLeft": 0.1,
+        "mouthStretchRight": 0.1,
+        "eyeLookUpLeft": 0.3,
+        "eyeLookUpRight": 0.3,
+        "eyeLookOutLeft": 0.2,
+        "eyeLookInRight": 0.2
+      },
+      "gesture_animation": "chin_stroke"
     },
     "explaining": {
+      "_description": "Default active teaching mode",
       "eye_gaze": "direct",
       "head_tilt_degrees": 0.0,
+      "blink_rate_per_minute": 12,
       "blendshape_weights": {
         "browOuterUpLeft": 0.2,
-        "browOuterUpRight": 0.2
-      }
+        "browOuterUpRight": 0.2,
+        "mouthSmileLeft": 0.15,
+        "mouthSmileRight": 0.15,
+        "eyeWideLeft": 0.1,
+        "eyeWideRight": 0.1
+      },
+      "gesture_animation": "forward_lean"
     },
     "encouraging": {
+      "_description": "Praising or motivating the student",
       "eye_gaze": "direct",
       "head_tilt_degrees": -3.0,
+      "blink_rate_per_minute": 10,
       "blendshape_weights": {
         "mouthSmileLeft": 0.6,
         "mouthSmileRight": 0.6,
         "eyeWideLeft": 0.2,
-        "eyeWideRight": 0.2
-      }
+        "eyeWideRight": 0.2,
+        "cheekSquintLeft": 0.3,
+        "cheekSquintRight": 0.3,
+        "browInnerUp": 0.15
+      },
+      "gesture_animation": "nod_slow"
+    },
+    "celebrating": {
+      "_description": "Student got it right — full celebration expression",
+      "eye_gaze": "direct",
+      "head_tilt_degrees": -5.0,
+      "blink_rate_per_minute": 5,
+      "blendshape_weights": {
+        "mouthSmileLeft": 0.9,
+        "mouthSmileRight": 0.9,
+        "eyeWideLeft": 0.5,
+        "eyeWideRight": 0.5,
+        "cheekSquintLeft": 0.6,
+        "cheekSquintRight": 0.6,
+        "browInnerUp": 0.4,
+        "browOuterUpLeft": 0.35,
+        "browOuterUpRight": 0.35,
+        "mouthOpen": 0.25,
+        "jawOpen": 0.2
+      },
+      "gesture_animation": "clap_hands"
     }
   },
+
   "phoneme_to_viseme": {
+    "_comment": "Maps ElevenLabs/ARKit phoneme codes to Three.js morph target names. Covers all 22 standard ARKit mouth visemes.",
+    "sil": "viseme_sil",
+    "PP": "viseme_PP",
+    "FF": "viseme_FF",
+    "TH": "viseme_TH",
+    "DD": "viseme_DD",
+    "kk": "viseme_kk",
+    "CH": "viseme_CH",
+    "SS": "viseme_SS",
+    "nn": "viseme_nn",
+    "RR": "viseme_RR",
+    "aa": "viseme_aa",
+    "E": "viseme_E",
+    "ih": "viseme_I",
+    "oh": "viseme_O",
+    "ou": "viseme_U",
+    "AH": "viseme_aa",
+    "EH": "viseme_E",
+    "IH": "viseme_I",
+    "OH": "viseme_O",
+    "OW": "viseme_O",
+    "UH": "viseme_U",
+    "UW": "viseme_U",
+    "EE": "viseme_E",
     "AA": "viseme_aa",
-    "EE": "viseme_ee",
-    "IH": "viseme_ih",
-    "OH": "viseme_oh",
-    "OU": "viseme_ou",
-    "PP": "viseme_pp",
-    "SS": "viseme_ss",
-    "TH": "viseme_th",
-    "FF": "viseme_ff"
+    "AE": "viseme_aa",
+    "AO": "viseme_O",
+    "AW": "viseme_O",
+    "AY": "viseme_aa",
+    "B": "viseme_PP",
+    "CH_alt": "viseme_CH",
+    "D": "viseme_DD",
+    "DH": "viseme_TH",
+    "ER": "viseme_RR",
+    "EY": "viseme_E",
+    "F": "viseme_FF",
+    "G": "viseme_kk",
+    "HH": "viseme_sil",
+    "IY": "viseme_I",
+    "JH": "viseme_CH",
+    "K": "viseme_kk",
+    "L": "viseme_nn",
+    "M": "viseme_PP",
+    "N": "viseme_nn",
+    "NG": "viseme_nn",
+    "OY": "viseme_O",
+    "P": "viseme_PP",
+    "R": "viseme_RR",
+    "S": "viseme_SS",
+    "SH": "viseme_CH",
+    "T": "viseme_DD",
+    "V": "viseme_FF",
+    "W": "viseme_U",
+    "Y": "viseme_I",
+    "Z": "viseme_SS",
+    "ZH": "viseme_CH"
+  },
+
+  "gesture_animation_clips": {
+    "_comment": "Three.js animation clip names in the avatar GLB file",
+    "idle_breathing": "Anim_Idle_Breathing",
+    "chin_stroke": "Anim_Thinking_ChinStroke",
+    "forward_lean": "Anim_Explain_ForwardLean",
+    "nod_slow": "Anim_Encourage_NodSlow",
+    "clap_hands": "Anim_Celebrate_Clap",
+    "head_shake": "Anim_Redirect_HeadShake",
+    "point_right": "Anim_Explain_PointRight",
+    "wave_hello": "Anim_Idle_WaveHello"
   }
 }

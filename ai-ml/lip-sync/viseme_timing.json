@@ -1,0 +1,53 @@
+{
+  "_comment": "Timing constants for smooth viseme interpolation in Three.js. Used by the frontend avatar controller to lerp between mouth shapes.",
+
+  "interpolation": {
+    "default_blend_duration_ms": 60,
+    "ease_in": "easeInQuad",
+    "ease_out": "easeOutQuad",
+    "ease_type": "cubic",
+    "_description": "Duration (ms) to transition between two viseme shapes. Short enough to feel natural, long enough to avoid jarring snaps."
+  },
+
+  "viseme_hold_durations_ms": {
+    "_comment": "How long each viseme shape is held before transitioning to the next phoneme.",
+    "viseme_sil": 80,
+    "viseme_PP": 90,
+    "viseme_FF": 85,
+    "viseme_TH": 95,
+    "viseme_DD": 80,
+    "viseme_kk": 90,
+    "viseme_CH": 100,
+    "viseme_SS": 110,
+    "viseme_nn": 85,
+    "viseme_RR": 95,
+    "viseme_aa": 120,
+    "viseme_E": 100,
+    "viseme_I": 90,
+    "viseme_O": 115,
+    "viseme_U": 110
+  },
+
+  "blink_animation": {
+    "duration_ms": 150,
+    "ease": "easeInOutSine",
+    "_description": "Full blink (close → hold → open) total duration."
+  },
+
+  "head_tilt_transition_ms": 400,
+  "eye_gaze_transition_ms": 300,
+  "mood_transition_ms": 500,
+
+  "lipsync_offset_ms": -40,
+  "_lipsync_offset_note": "Negative offset starts lip movement slightly before audio to compensate for rendering latency.",
+
+  "weight_scale": {
+    "_comment": "Multiply all phoneme blendshape weights by this factor. 1.0 = full expression, 0.7 = subtle.",
+    "default": 1.0,
+    "subtle": 0.7,
+    "exaggerated": 1.3
+  },
+
+  "silence_threshold_weight": 0.05,
+  "_silence_note": "If viseme weight < this value, snap to sil (silence) instead of blending to avoid micro-twitches."
+}
