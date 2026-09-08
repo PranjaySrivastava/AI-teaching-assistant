@@ -1,0 +1,24 @@
+{
+  "_comment": "AssemblyAI RealtimeTranscriber configuration. Load this and spread into the RealtimeTranscriber constructor options.",
+  "sample_rate": 16000,
+  "encoding": "pcm_s16le",
+  "language_code": "en_us",
+  "punctuate": true,
+  "format_text": true,
+  "word_boost_param": "high",
+  "end_utterance_silence_threshold": 700,
+  "disable_partial_transcripts": false,
+  "_usage_example": {
+    "note": "In backend/node-service/src/index.js, import domain_vocabulary.json and spread word_boost into this config",
+    "code": "const vocab = require('../../ai-ml/assemblyai/domain_vocabulary.json'); const realtimeConfig = { ...require('../../ai-ml/assemblyai/realtime_config.json'), word_boost: vocab.word_boost };"
+  },
+  "_field_docs": {
+    "sample_rate": "Audio sample rate in Hz. Must match Web Audio API AudioContext sample rate (16000 Hz recommended for speech).",
+    "encoding": "PCM signed 16-bit little-endian — matches browser MediaRecorder raw PCM output.",
+    "punctuate": "Automatically insert punctuation into transcript.",
+    "format_text": "Apply text formatting (capitalization, number normalization).",
+    "word_boost_param": "Aggressiveness of word boosting: 'low' | 'default' | 'high'.",
+    "end_utterance_silence_threshold": "Milliseconds of silence before an utterance is considered complete and sent for final processing.",
+    "disable_partial_transcripts": "Set false to receive partial (in-progress) transcripts for real-time display."
+  }
+}
