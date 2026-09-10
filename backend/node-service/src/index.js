@@ -1,13 +1,16 @@
 const express = require('express');
 const http = require('http');
 const cors = require('cors');
-const dotenv = require('dotenv');
 const { WebSocketServer } = require('ws');
-
-dotenv.config();
+const config = require('./config');
+const apiRoutes = require('./routes/api');
+const { openRouterService } = require('./services/openRouterService');
+const { visualEngineService } = require('./services/visualEngineService');
+const { ttsService } = require('./services/ttsService');
+const { sessionService } = require('./services/sessionService');
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = config.port;
 
 app.use(cors());
 app.use(express.json());
@@ -18,41 +21,96 @@ app.get('/health', (req, res) => {
     status: 'ok',
     service: 'node-orchestration-service',
     timestamp: new Date().toISOString(),
-  });
-});
-
-// Q&A / Ask endpoint stub
-app.post('/api/ask', (req, res) => {
-  const { question, sessionId = 'default-session' } = req.body;
-
-  if (!question) {
-    return res.status(400).json({ error: 'Question is required' });
-  }
-
-  // Placeholder response for boilerplate
-  return res.status(200).json({
-    sessionId,
-    question,
-    answer: `Received question: "${question}". Backend orchestration is ready for AssemblyAI, Claude, and ElevenLabs integration.`,
-    visualSequence: {
-      type: 'algorithm_visualization',
-      topic: 'data-structures-and-algorithms',
-      steps: [],
+    openRouter: {
+      defaultModel: config.openRouter.defaultModel,
+      glmModel: config.openRouter.glmModel,
+      deepseekModel: config.openRouter.deepseekModel,
     },
   });
 });
 
+// Mount modular API routes under /api
+app.use('/api', apiRoutes);
+
 const server = http.createServer(app);
 
-// Real-time WebSocket server for streaming avatar speech and phonemes
+// Real-time WebSocket server for streaming avatar speech, phonemes, and visual steps
 const wss = new WebSocketServer({ server });
 
 wss.on('connection', (ws) => {
-  ws.send(JSON.stringify({ type: 'connected', message: 'WebSocket connection established' }));
+  ws.send(
+    JSON.stringify({
+      type: 'connected',
+      message: 'WebSocket connection established with AI Teaching Assistant Orchestrator',
+    })
+  );
 
-  ws.on('message', (message) => {
+  ws.on('message', async (message) => {
     try {
       const data = JSON.parse(message.toString());
+
+      // If client requests real-time streaming answer
+      if (data.type === 'ask_stream') {
+        const { question, sessionId = 'ws-session', model } = data;
+
+        if (!question) {
+          ws.send(JSON.stringify({ type: 'error', message: 'Question is required' }));
+          return;
+        }
+
+        ws.send(JSON.stringify({ type: 'status', message: 'Generating pedagogical response...' }));
+
+        const history = sessionService.getContextHistory(sessionId);
+        const llmResult = await openRouterService.generateTeachingResponse(
+          question,
+          history,
+          model
+        );
+        const visualSeq = visualEngineService.normalizeSequence(llmResult.visualSequence, question);
+        const ttsResult = await ttsService.synthesize(llmResult.explanation);
+
+        // Update session
+        sessionService.addMessage(sessionId, 'user', question);
+        sessionService.addMessage(sessionId, 'assistant', llmResult.explanation, {
+          code: llmResult.code,
+          visualSequence: visualSeq,
+        });
+
+        // 1. Emit code immediately (t = 0s)
+        ws.send(
+          JSON.stringify({
+            type: 'code_ready',
+            timestamp: 0,
+            code: llmResult.code,
+          })
+        );
+
+        // 2. Emit speech audio and phoneme lip-sync timings
+        ws.send(
+          JSON.stringify({
+            type: 'speech_ready',
+            explanation: llmResult.explanation,
+            audioUrl: ttsResult.audioUrl,
+            phonemeTimings: ttsResult.phonemeTimings,
+            mood: llmResult.mood,
+          })
+        );
+
+        // 3. Emit step-by-step visual sequence for synchronized canvas animation (t >= 3s)
+        ws.send(
+          JSON.stringify({
+            type: 'visual_sequence_ready',
+            timestamp: 3000,
+            visualSequence: visualSeq,
+            suggestedFollowUps: llmResult.suggestedFollowUps,
+          })
+        );
+
+        ws.send(JSON.stringify({ type: 'complete', sessionId }));
+        return;
+      }
+
+      // Default ack
       ws.send(JSON.stringify({ type: 'ack', received: data }));
     } catch (_err) {
       ws.send(JSON.stringify({ type: 'error', message: 'Invalid JSON payload' }));
@@ -63,6 +121,9 @@ wss.on('connection', (ws) => {
 if (process.env.NODE_ENV !== 'test') {
   server.listen(PORT, () => {
     console.log(`Node Orchestration Service running on port ${PORT}`);
+    console.log(
+      `OpenRouter Models: GLM (${config.openRouter.glmModel}) | DeepSeek (${config.openRouter.deepseekModel})`
+    );
   });
 }
 
