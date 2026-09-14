@@ -19,6 +19,18 @@ class OpenRouterService {
     this.deepseekModel = customConfig.deepseekModel || config.openRouter.deepseekModel;
     this.availableModels = config.openRouter.availableModels;
     this.systemPrompt = this.loadSystemPrompt();
+    this.fewShotExamples = this.loadFewShotExamples();
+  }
+
+  loadFewShotExamples() {
+    try {
+      if (fs.existsSync(config.fewShotExamplesPath)) {
+        return JSON.parse(fs.readFileSync(config.fewShotExamplesPath, 'utf-8')).examples || [];
+      }
+    } catch (_err) {
+      // Fall through to no examples when the optional file is unavailable or invalid.
+    }
+    return [];
   }
 
   /**
@@ -124,6 +136,7 @@ Every response MUST be strictly valid JSON matching this exact schema:
         role: 'system',
         content: `${this.systemPrompt}\n\nIMPORTANT: Output ONLY a valid raw JSON object. Do not wrap in markdown quotes if possible, or provide valid JSON inside \`\`\`json markdown blocks. Respond with NO conversational filler outside the JSON.`,
       },
+      ...this.fewShotExamples,
     ];
 
     // Append conversation history
@@ -226,7 +239,7 @@ Every response MUST be strictly valid JSON matching this exact schema:
           steps: [],
         },
         suggestedFollowUps: Array.isArray(parsed.suggestedFollowUps)
-          ? parsed.suggestedFollowUps
+          ? parsed.suggestedFollowUps.slice(0, 2)
           : [
               'What is the time complexity in the worst case?',
               'Can you explain how the pointers move step by step?',
@@ -296,27 +309,11 @@ Every response MUST be strictly valid JSON matching this exact schema:
         explanation:
           "I specialize in Data Structures and Algorithms! Let's focus our study on topics like Sorting, Trees, Graphs, or Dynamic Programming. What algorithm would you like to master today?",
         mood: 'encouraging',
-        code: {
-          language: 'python',
-          snippet:
-            '# Ready to explore Data Structures & Algorithms\n# Ask about QuickSort, Binary Search, BST, Graphs, etc.',
-        },
-        visualSequence: {
-          type: 'algorithm_visualization',
-          title: 'Topic Overview',
-          steps: [
-            {
-              step: 1,
-              action: 'highlight',
-              description: 'Explore Core Data Structures & Algorithms',
-              elements: [0],
-            },
-          ],
-        },
+        code: null,
+        visualSequence: null,
         suggestedFollowUps: [
           'Explain how QuickSort works with a simple example',
           'How does Binary Search achieve O(log n) time complexity?',
-          'What is the difference between BFS and DFS?',
         ],
         modelUsed: model,
         fallbackMode: true,
@@ -429,7 +426,6 @@ Every response MUST be strictly valid JSON matching this exact schema:
         suggestedFollowUps: [
           'What if the array is already sorted?',
           'What is the space complexity of QuickSort?',
-          'How does QuickSort compare to MergeSort?',
         ],
         modelUsed: model,
         fallbackMode: true,

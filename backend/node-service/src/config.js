@@ -13,7 +13,8 @@ const config = {
     apiKey: process.env.OPENROUTER_API_KEY || '',
     baseUrl: process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
     siteUrl:
-      process.env.OPENROUTER_SITE_URL || 'https://github.com/Salil-IND/AI-teaching-assistant',
+      process.env.OPENROUTER_SITE_URL ||
+      'https://github.com/PranjaySrivastava/AI-teaching-assistant',
     siteName: process.env.OPENROUTER_SITE_NAME || 'AI Teaching Assistant',
     defaultModel: process.env.OPENROUTER_DEFAULT_MODEL || 'deepseek/deepseek-chat',
     // GLM Models supported via OpenRouter
@@ -67,6 +68,7 @@ const config = {
 
   // System Prompt Path
   systemPromptPath: path.resolve(__dirname, '../../../ai-ml/prompts/system_prompt.md'),
+  fewShotExamplesPath: path.resolve(__dirname, '../../../ai-ml/prompts/few_shot_examples.json'),
 };
 
 module.exports = config;

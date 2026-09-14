@@ -46,7 +46,14 @@ router.post('/ask', async (req, res) => {
 
     const explanation = llmResult.explanation || 'Here is the step-by-step explanation.';
     const mood = llmResult.mood || 'explaining';
-    const code = llmResult.code || { language: 'python', snippet: '' };
+
+    //Applied fix for Out of Scope Null handling
+    const isOutOfScope = llmResult.code === null && llmResult.visualSequence === null;
+    const code = isOutOfScope ? null : llmResult.code || { language: 'python', snippet: '' };
+    const visualSequence = isOutOfScope
+      ? null
+      : visualEngineService.normalizeSequence(llmResult.visualSequence, question);
+
     const suggestedFollowUps = llmResult.suggestedFollowUps || [];
     const modelUsed = llmResult.modelUsed || 'default';
 
