@@ -1,36 +1,209 @@
 {
+  "_comment": "End-to-end demo test scenarios for Professor Ada. 15 cases covering Easy/Medium/Hard/Edge. Used by eval_runner.js.",
+  "version": "2.0.0",
   "scenarios": [
     {
       "id": "scenario-01",
       "name": "Basic QuickSort Explanation",
-      "user_input": "Hey, explain how QuickSort works with a simple example",
-      "expected_concepts": ["partition", "pivot", "divide-and-conquer"],
+      "difficulty": "easy",
+      "user_input": "Hey, explain how QuickSort works with a simple example.",
+      "expected_concepts": ["partition", "pivot", "divide-and-conquer", "recursion"],
       "expected_visual_type": "sorting",
+      "expected_mood": "explaining",
+      "expected_follow_ups_count": 2,
+      "max_explanation_words": 90,
       "max_latency_seconds": 2.0
     },
     {
       "id": "scenario-02",
-      "name": "Follow-Up Worst Case Complexity",
-      "user_input": "What if the array is already sorted?",
-      "expected_concepts": ["O(n^2)", "unbalanced partition"],
+      "name": "QuickSort Worst Case Follow-Up",
+      "difficulty": "medium",
+      "user_input": "What if the array is already sorted? Does QuickSort still work well?",
+      "expected_concepts": ["O(n^2)", "unbalanced partition", "worst case", "random pivot"],
       "expected_visual_type": "sorting",
+      "expected_mood": "thinking",
+      "expected_follow_ups_count": 2,
+      "max_explanation_words": 90,
       "max_latency_seconds": 2.0
     },
     {
       "id": "scenario-03",
-      "name": "Graph Traversal BFS vs DFS",
-      "user_input": "How is BFS different from DFS?",
-      "expected_concepts": ["queue", "stack", "level-order", "backtracking"],
+      "name": "BFS vs DFS Comparison",
+      "difficulty": "medium",
+      "user_input": "How is BFS different from DFS when traversing a graph?",
+      "expected_concepts": ["queue", "stack", "level-order", "backtracking", "shortest path"],
       "expected_visual_type": "graph",
+      "expected_mood": "explaining",
+      "expected_follow_ups_count": 2,
+      "max_explanation_words": 90,
       "max_latency_seconds": 2.0
     },
     {
       "id": "scenario-04",
-      "name": "Out of Scope Redirection",
+      "name": "Out-of-Scope Redirection — Geography",
+      "difficulty": "edge",
       "user_input": "What is the capital of France?",
       "expected_concepts": ["redirect to DS&A", "polite response"],
       "expected_visual_type": null,
+      "expected_mood": "encouraging",
+      "expected_follow_ups_count": 2,
+      "max_explanation_words": 30,
       "max_latency_seconds": 1.5
+    },
+    {
+      "id": "scenario-05",
+      "name": "Dynamic Programming — Fibonacci",
+      "difficulty": "easy",
+      "user_input": "Can you explain dynamic programming using the Fibonacci sequence?",
+      "expected_concepts": [
+        "memoization",
+        "tabulation",
+        "overlapping subproblems",
+        "optimal substructure"
+      ],
+      "expected_visual_type": "dp",
+      "expected_mood": "explaining",
+      "expected_follow_ups_count": 2,
+      "max_explanation_words": 90,
+      "max_latency_seconds": 2.0
+    },
+    {
+      "id": "scenario-06",
+      "name": "AVL Tree Insertion & Rotation",
+      "difficulty": "hard",
+      "user_input": "How does insertion work in an AVL Tree and what are rotations?",
+      "expected_concepts": [
+        "balance factor",
+        "rotation",
+        "left rotation",
+        "right rotation",
+        "height"
+      ],
+      "expected_visual_type": "tree",
+      "expected_mood": "explaining",
+      "expected_follow_ups_count": 2,
+      "max_explanation_words": 90,
+      "max_latency_seconds": 2.0
+    },
+    {
+      "id": "scenario-07",
+      "name": "Dijkstra's Algorithm",
+      "difficulty": "hard",
+      "user_input": "Walk me through Dijkstra's algorithm for finding the shortest path.",
+      "expected_concepts": [
+        "greedy",
+        "priority queue",
+        "relaxation",
+        "weighted graph",
+        "O(E log V)"
+      ],
+      "expected_visual_type": "graph",
+      "expected_mood": "explaining",
+      "expected_follow_ups_count": 2,
+      "max_explanation_words": 90,
+      "max_latency_seconds": 2.0
+    },
+    {
+      "id": "scenario-08",
+      "name": "Binary Search Tree Operations",
+      "difficulty": "easy",
+      "user_input": "What is a Binary Search Tree and how does search work?",
+      "expected_concepts": ["left subtree", "right subtree", "O(log n)", "O(n) worst case"],
+      "expected_visual_type": "tree",
+      "expected_mood": "explaining",
+      "expected_follow_ups_count": 2,
+      "max_explanation_words": 90,
+      "max_latency_seconds": 2.0
+    },
+    {
+      "id": "scenario-09",
+      "name": "Sliding Window Technique",
+      "difficulty": "medium",
+      "user_input": "Explain the sliding window technique with a real example.",
+      "expected_concepts": ["window", "two pointers", "O(n)", "subarray", "maximum sum"],
+      "expected_visual_type": "array",
+      "expected_mood": "explaining",
+      "expected_follow_ups_count": 2,
+      "max_explanation_words": 90,
+      "max_latency_seconds": 2.0
+    },
+    {
+      "id": "scenario-10",
+      "name": "Merge Sort Step-by-Step",
+      "difficulty": "easy",
+      "user_input": "Can you walk me through MergeSort step by step?",
+      "expected_concepts": ["divide", "merge", "O(n log n)", "stable sort", "auxiliary space"],
+      "expected_visual_type": "sorting",
+      "expected_mood": "explaining",
+      "expected_follow_ups_count": 2,
+      "max_explanation_words": 90,
+      "max_latency_seconds": 2.0
+    },
+    {
+      "id": "scenario-11",
+      "name": "0/1 Knapsack Problem",
+      "difficulty": "hard",
+      "user_input": "Explain the 0/1 Knapsack problem and how DP solves it.",
+      "expected_concepts": ["capacity", "weight", "value", "dp table", "include or exclude"],
+      "expected_visual_type": "dp",
+      "expected_mood": "thinking",
+      "expected_follow_ups_count": 2,
+      "max_explanation_words": 90,
+      "max_latency_seconds": 2.0
+    },
+    {
+      "id": "scenario-12",
+      "name": "Trie Data Structure",
+      "difficulty": "medium",
+      "user_input": "How does a Trie work and when would you use one?",
+      "expected_concepts": ["prefix", "autocomplete", "O(L)", "children nodes", "root"],
+      "expected_visual_type": "tree",
+      "expected_mood": "explaining",
+      "expected_follow_ups_count": 2,
+      "max_explanation_words": 90,
+      "max_latency_seconds": 2.0
+    },
+    {
+      "id": "scenario-13",
+      "name": "Out-of-Scope Redirection — Math",
+      "difficulty": "edge",
+      "user_input": "What is the derivative of sin(x)?",
+      "expected_concepts": ["redirect to DS&A", "polite response"],
+      "expected_visual_type": null,
+      "expected_mood": "encouraging",
+      "expected_follow_ups_count": 2,
+      "max_explanation_words": 30,
+      "max_latency_seconds": 1.5
+    },
+    {
+      "id": "scenario-14",
+      "name": "Two Pointers Technique",
+      "difficulty": "medium",
+      "user_input": "What is the two pointers technique and when does it work better than brute force?",
+      "expected_concepts": ["sorted array", "O(n)", "left pointer", "right pointer", "sum target"],
+      "expected_visual_type": "array",
+      "expected_mood": "explaining",
+      "expected_follow_ups_count": 2,
+      "max_explanation_words": 90,
+      "max_latency_seconds": 2.0
+    },
+    {
+      "id": "scenario-15",
+      "name": "Celebrating Correct Student Answer",
+      "difficulty": "edge",
+      "user_input": "So QuickSort uses divide and conquer with a pivot, and average case is O(n log n) — did I get that right?",
+      "expected_concepts": ["confirmation", "correct understanding", "positive reinforcement"],
+      "expected_visual_type": "sorting",
+      "expected_mood": "celebrating",
+      "expected_follow_ups_count": 2,
+      "max_explanation_words": 90,
+      "max_latency_seconds": 2.0
     }
-  ]
+  ],
+  "_summary": {
+    "total": 15,
+    "by_difficulty": { "easy": 4, "medium": 5, "hard": 4, "edge": 3 },
+    "by_visual_type": { "sorting": 4, "graph": 2, "tree": 4, "array": 2, "dp": 2, "null": 2 },
+    "by_mood": { "explaining": 10, "thinking": 2, "encouraging": 2, "celebrating": 1 }
+  }
 }
