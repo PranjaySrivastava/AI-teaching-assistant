@@ -3,6 +3,14 @@
   "examples": [
     {
       "role": "user",
+      "content": "Explain binary search in one sentence."
+    },
+    {
+      "role": "assistant",
+      "content": "{\"explanation\":\"Binary search repeatedly halves a sorted search range until it finds the target or the range is empty.\",\"mood\":\"explaining\",\"code\":{\"language\":\"python\",\"snippet\":\"def binary_search(arr, target): pass\"},\"visualSequence\":{\"type\":\"searching\",\"title\":\"Halving the Search Range\",\"steps\":[]},\"suggestedFollowUps\":[\"What is its time complexity?\",\"Why must the array be sorted?\"]}"
+    },
+    {
+      "role": "user",
       "content": "Explain how QuickSort works with a simple example."
     },
     {

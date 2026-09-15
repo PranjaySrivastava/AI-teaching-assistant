@@ -14,7 +14,7 @@ Based on the Hackathon specification (Page 5 of Architecture Guide):
 ### 1. API Orchestration (`backend/node-service/`)
 
 - **Express & WebSocket Server**: Build and maintain the orchestration server coordinating:
-  `AssemblyAI (STT) → Claude (LLM) → Visual Plan Generator → ElevenLabs (TTS)`
+  `AssemblyAI (STT) → OpenRouter GLM / DeepSeek (LLM) → Visual Plan Generator → ElevenLabs (TTS)`
 - **WebSocket Streaming**: Stream audio chunks, phoneme timestamps, and visual sequence steps to the frontend in real-time.
 - **Latency Target**: Achieve `<2.0 second` latency from student question completion to the first visual and voice response.
 
@@ -23,13 +23,16 @@ Based on the Hackathon specification (Page 5 of Architecture Guide):
 - Integrate AssemblyAI SDK / streaming WebSocket for live speech transcription.
 - Apply custom domain vocabulary boost words from `ai-ml/assemblyai/domain_vocabulary.json` to ensure high transcription accuracy on CS terms.
 
-### 3. Claude LLM Integration & Response Parsing
+### 3. OpenRouter LLM Integration & Response Parsing (GLM & DeepSeek)
 
-- Connect to Claude API (`@anthropic-ai/sdk` or REST) using the system prompt in `ai-ml/prompts/system_prompt.md`.
-- Parse Claude's structured JSON response into:
-  - `explanation`: Spoken dialogue for TTS.
-  - `code`: Clean reference code.
-  - `visualSequence`: Step-by-step animation instructions for the frontend canvas.
+- Connect to OpenRouter API supporting **GLM** (`thudm/glm-4-9b-chat`, `zhipuai/glm-4-plus`) and **DeepSeek** (`deepseek/deepseek-chat`, `deepseek/deepseek-r1`) models using the system prompt in `ai-ml/prompts/system_prompt.md`.
+- Select models dynamically via request payload (`model: 'glm'` or `model: 'deepseek'`).
+- Parse structured JSON responses conforming to Professor Ada persona into:
+  - `explanation`: Spoken dialogue for TTS avatar (<90 words).
+  - `mood`: Avatar expression (`explaining`, `thinking`, `encouraging`, `celebrating`).
+  - `code`: Clean reference code snippet.
+  - `visualSequence`: Step-by-step animation instructions for the frontend canvas/SVG visualizer.
+  - `suggestedFollowUps`: Relevant follow-up questions for interactive learning.
 
 ### 4. ElevenLabs TTS & Phoneme Lip-Sync
 
