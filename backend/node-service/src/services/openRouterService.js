@@ -226,18 +226,23 @@ Every response MUST be strictly valid JSON matching this exact schema:
       const parsed = JSON.parse(cleaned);
 
       // Validate required properties
+      const isOutOfScope = parsed.code === null && parsed.visualSequence === null;
       return {
         explanation: parsed.explanation || 'Let us explore this algorithm step by step.',
         mood: parsed.mood || 'explaining',
-        code: {
-          language: parsed.code?.language || 'python',
-          snippet: parsed.code?.snippet || '# Implementation details coming up',
-        },
-        visualSequence: parsed.visualSequence || {
-          type: 'algorithm_visualization',
-          title: 'Algorithm Execution',
-          steps: [],
-        },
+        code: isOutOfScope
+          ? null
+          : parsed.code || {
+              language: 'python',
+              snippet: '# Implementation details coming up',
+            },
+        visualSequence: isOutOfScope
+          ? null
+          : parsed.visualSequence || {
+              type: 'algorithm_visualization',
+              title: 'Algorithm Execution',
+              steps: [],
+            },
         suggestedFollowUps: Array.isArray(parsed.suggestedFollowUps)
           ? parsed.suggestedFollowUps.slice(0, 2)
           : [
@@ -262,7 +267,10 @@ Every response MUST be strictly valid JSON matching this exact schema:
         mood: 'explaining',
         code: { language: 'python', snippet: '# Reference code' },
         visualSequence: { type: 'algorithm_visualization', title: 'Algorithm Steps', steps: [] },
-        suggestedFollowUps: ['Can you show a visual step-by-step example?'],
+        suggestedFollowUps: [
+          'Can you show a visual step-by-step example?',
+          'What is the time complexity in the worst case?',
+        ],
       };
     }
   }

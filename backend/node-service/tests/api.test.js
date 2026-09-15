@@ -36,6 +36,17 @@ describe('API Routes Integration', () => {
       expect(res.statusCode).toEqual(200);
       expect(res.body.modelUsed).toContain('deepseek');
     });
+
+    it('should return null code and visualSequence for out-of-scope non-DSA questions', async () => {
+      const res = await request(app).post('/api/ask').send({
+        question: 'What is the capital of France?',
+      });
+      expect(res.statusCode).toEqual(200);
+      expect(res.body.code).toBeNull();
+      expect(res.body.visualSequence).toBeNull();
+      expect(res.body.mood).toBe('encouraging');
+      expect(res.body.suggestedFollowUps).toHaveLength(2);
+    });
   });
 
   describe('GET and DELETE /api/session/:sessionId', () => {

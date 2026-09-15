@@ -47,7 +47,7 @@ router.post('/ask', async (req, res) => {
     const explanation = llmResult.explanation || 'Here is the step-by-step explanation.';
     const mood = llmResult.mood || 'explaining';
 
-    //Applied fix for Out of Scope Null handling
+    // Out of scope null handling
     const isOutOfScope = llmResult.code === null && llmResult.visualSequence === null;
     const code = isOutOfScope ? null : llmResult.code || { language: 'python', snippet: '' };
     const visualSequence = isOutOfScope
@@ -56,12 +56,6 @@ router.post('/ask', async (req, res) => {
 
     const suggestedFollowUps = llmResult.suggestedFollowUps || [];
     const modelUsed = llmResult.modelUsed || 'default';
-
-    // 2. Validate and enrich Visual Generation sequence
-    const visualSequence = visualEngineService.normalizeSequence(
-      llmResult.visualSequence,
-      question
-    );
 
     // 3. Synthesize speech and phonemes for avatar lip-sync
     const ttsResult = await ttsService.synthesize(explanation);

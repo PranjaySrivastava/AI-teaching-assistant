@@ -84,10 +84,12 @@ describe('OpenRouterService', () => {
       expect(res.visualSequence.type).toEqual('complexity_analysis');
     });
 
-    it('should handle out-of-scope non-DSA questions gracefully', async () => {
+    it('should handle out-of-scope non-DSA questions gracefully with null code and visualSequence', async () => {
       const res = await service.generateTeachingResponse('What is the capital of France?');
       expect(res.explanation).toContain('Data Structures and Algorithms');
-      expect(res.suggestedFollowUps.length).toBeGreaterThan(0);
+      expect(res.code).toBeNull();
+      expect(res.visualSequence).toBeNull();
+      expect(res.suggestedFollowUps).toHaveLength(2);
     });
   });
 });

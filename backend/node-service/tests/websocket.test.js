@@ -11,7 +11,9 @@ describe('WebSocket streaming API', () => {
     });
   });
 
-  afterAll((done) => server.close(done));
+  afterAll((done) => {
+    server.close(done);
+  });
 
   it('sends the connected event and acknowledges ordinary messages', (done) => {
     const socket = new WebSocket(address);

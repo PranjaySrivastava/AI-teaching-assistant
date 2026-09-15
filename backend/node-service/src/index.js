@@ -66,13 +66,17 @@ wss.on('connection', (ws) => {
           history,
           model
         );
-        const visualSeq = visualEngineService.normalizeSequence(llmResult.visualSequence, question);
+        const isOutOfScope = llmResult.code === null && llmResult.visualSequence === null;
+        const code = isOutOfScope ? null : llmResult.code || { language: 'python', snippet: '' };
+        const visualSeq = isOutOfScope
+          ? null
+          : visualEngineService.normalizeSequence(llmResult.visualSequence, question);
         const ttsResult = await ttsService.synthesize(llmResult.explanation);
 
         // Update session
         sessionService.addMessage(sessionId, 'user', question);
         sessionService.addMessage(sessionId, 'assistant', llmResult.explanation, {
-          code: llmResult.code,
+          code,
           visualSequence: visualSeq,
         });
 
@@ -81,7 +85,7 @@ wss.on('connection', (ws) => {
           JSON.stringify({
             type: 'code_ready',
             timestamp: 0,
-            code: llmResult.code,
+            code,
           })
         );
 

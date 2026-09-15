@@ -1,4 +1,5 @@
 {
+  "description": "Few-shot examples for Claude to always produce valid structured JSON. Include before user question in the messages array.",
   "examples": [
     {
       "role": "user",
@@ -7,8 +8,7 @@
     {
       "role": "assistant",
       "content": "{\"explanation\":\"Binary search repeatedly halves a sorted search range until it finds the target or the range is empty.\",\"mood\":\"explaining\",\"code\":{\"language\":\"python\",\"snippet\":\"def binary_search(arr, target): pass\"},\"visualSequence\":{\"type\":\"searching\",\"title\":\"Halving the Search Range\",\"steps\":[]},\"suggestedFollowUps\":[\"What is its time complexity?\",\"Why must the array be sorted?\"]}"
-  "description": "Few-shot examples for Claude to always produce valid structured JSON. Include before user question in the messages array.",
-  "examples": [
+    },
     {
       "role": "user",
       "content": "Explain how QuickSort works with a simple example."
