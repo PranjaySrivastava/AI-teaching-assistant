@@ -699,15 +699,21 @@ export default function Home() {
           <div className="flex items-center gap-3">
             <h1 className="text-base font-semibold tracking-tight text-slate-100 flex items-center gap-2">
               <span className="bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent font-bold">
-                AlgoTutor AI
+                AI Teaching Assistant
               </span>
               <span className="text-xs text-slate-500 hidden sm:inline">
-                | Interactive DS&A Assistant
+                | Interactive DS&A Platform
               </span>
             </h1>
           </div>
 
           <div className="flex items-center gap-3">
+            {/* AssemblyAI Live Pipeline Badge */}
+            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full bg-cyan-950/40 border border-cyan-700/40 text-[11px] text-cyan-300 font-mono">
+              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+              <span>AssemblyAI Live Pipeline</span>
+            </div>
+
             {/* Global Search */}
             <div className="relative w-48 sm:w-64">
               <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
