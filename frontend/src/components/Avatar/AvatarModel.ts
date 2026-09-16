@@ -218,34 +218,91 @@ export class AvatarModel {
     // B. Lip-sync visemes (apply authentic Oculus speech blendshapes)
     // Head_Mesh, Teeth_Mesh, and Tongue_Mesh all natively contain sculpted Oculus visemes
     // (viseme_aa, viseme_O, viseme_E, viseme_I, viseme_U, viseme_PP, viseme_FF, etc.)
-    // which already sculpt complete anatomical jaw, lip, and tongue positions.
+    // In addition, jawOpen and mouthOpen are articulated proportionally so that
+    // the jaw, teeth, and tongue part visibly and naturally in sync with the spoken words.
     let maxSpeechActivity = 0;
     visemeWeights.forEach((val, key) => {
       if (val > 0.005) {
-        combinedTargets[key] = (combinedTargets[key] || 0) + val * 0.92;
+        combinedTargets[key] = (combinedTargets[key] || 0) + val * 0.95;
         maxSpeechActivity = Math.max(maxSpeechActivity, val);
 
-        // Subtle secondary nuance for vowels without over-opening the jaw
-        if (key === 'viseme_aa') {
-          combinedTargets['jawOpen'] = Math.max(combinedTargets['jawOpen'] || 0, val * 0.12);
-        } else if (key === 'viseme_O') {
-          combinedTargets['jawOpen'] = Math.max(combinedTargets['jawOpen'] || 0, val * 0.08);
-          combinedTargets['mouthFunnel'] = Math.max(
-            combinedTargets['mouthFunnel'] || 0,
-            val * 0.15
-          );
-        } else if (key === 'viseme_E' || key === 'viseme_I') {
-          combinedTargets['mouthSmile'] = Math.max(combinedTargets['mouthSmile'] || 0, val * 0.1);
-        } else if (key === 'viseme_PP') {
-          combinedTargets['mouthClose'] = Math.max(combinedTargets['mouthClose'] || 0, val * 0.35);
+        switch (key) {
+          case 'viseme_aa': // Broad open vowel ("father", "hot", "analyze")
+            combinedTargets['jawOpen'] = Math.max(combinedTargets['jawOpen'] || 0, val * 0.52);
+            combinedTargets['mouthOpen'] = Math.max(combinedTargets['mouthOpen'] || 0, val * 0.46);
+            break;
+          case 'viseme_O': // Rounded open vowel ("go", "algorithm", "all")
+            combinedTargets['jawOpen'] = Math.max(combinedTargets['jawOpen'] || 0, val * 0.44);
+            combinedTargets['mouthOpen'] = Math.max(combinedTargets['mouthOpen'] || 0, val * 0.38);
+            combinedTargets['mouthFunnel'] = Math.max(
+              combinedTargets['mouthFunnel'] || 0,
+              val * 0.35
+            );
+            break;
+          case 'viseme_E': // Mid-front vowel ("bed", "say", "explain")
+            combinedTargets['jawOpen'] = Math.max(combinedTargets['jawOpen'] || 0, val * 0.34);
+            combinedTargets['mouthOpen'] = Math.max(combinedTargets['mouthOpen'] || 0, val * 0.3);
+            combinedTargets['mouthSmile'] = Math.max(
+              combinedTargets['mouthSmile'] || 0,
+              val * 0.15
+            );
+            break;
+          case 'viseme_I': // High-front vowel ("see", "it", "pivot")
+            combinedTargets['jawOpen'] = Math.max(combinedTargets['jawOpen'] || 0, val * 0.28);
+            combinedTargets['mouthOpen'] = Math.max(combinedTargets['mouthOpen'] || 0, val * 0.26);
+            combinedTargets['mouthSmile'] = Math.max(
+              combinedTargets['mouthSmile'] || 0,
+              val * 0.18
+            );
+            break;
+          case 'viseme_U': // High-back rounded vowel ("you", "choose", "two")
+            combinedTargets['jawOpen'] = Math.max(combinedTargets['jawOpen'] || 0, val * 0.26);
+            combinedTargets['mouthOpen'] = Math.max(combinedTargets['mouthOpen'] || 0, val * 0.22);
+            combinedTargets['mouthPucker'] = Math.max(
+              combinedTargets['mouthPucker'] || 0,
+              val * 0.35
+            );
+            break;
+          case 'viseme_PP': // Bilabial plosives (P, B, M) — lips seal firmly together
+            combinedTargets['mouthClose'] = Math.max(
+              combinedTargets['mouthClose'] || 0,
+              val * 0.85
+            );
+            combinedTargets['jawOpen'] = Math.max(combinedTargets['jawOpen'] || 0, val * 0.05);
+            break;
+          case 'viseme_FF': // Labiodentals (F, V)
+            combinedTargets['jawOpen'] = Math.max(combinedTargets['jawOpen'] || 0, val * 0.18);
+            combinedTargets['mouthOpen'] = Math.max(combinedTargets['mouthOpen'] || 0, val * 0.15);
+            break;
+          case 'viseme_TH': // Dentals (TH)
+            combinedTargets['jawOpen'] = Math.max(combinedTargets['jawOpen'] || 0, val * 0.22);
+            combinedTargets['mouthOpen'] = Math.max(combinedTargets['mouthOpen'] || 0, val * 0.2);
+            combinedTargets['tongueOut'] = Math.max(combinedTargets['tongueOut'] || 0, val * 0.18);
+            break;
+          case 'viseme_DD': // Alveolars (T, D)
+          case 'viseme_kk': // Velars (K, G)
+          case 'viseme_CH': // Postalveolars (CH, SH, J)
+          case 'viseme_nn': // Nasals & liquids (N, L)
+          case 'viseme_RR': // Rhotics (R)
+            combinedTargets['jawOpen'] = Math.max(combinedTargets['jawOpen'] || 0, val * 0.24);
+            combinedTargets['mouthOpen'] = Math.max(combinedTargets['mouthOpen'] || 0, val * 0.22);
+            break;
+          case 'viseme_SS': // Sibilants (S, Z)
+            combinedTargets['jawOpen'] = Math.max(combinedTargets['jawOpen'] || 0, val * 0.16);
+            combinedTargets['mouthOpen'] = Math.max(combinedTargets['mouthOpen'] || 0, val * 0.14);
+            break;
+          default:
+            combinedTargets['jawOpen'] = Math.max(combinedTargets['jawOpen'] || 0, val * 0.25);
+            combinedTargets['mouthOpen'] = Math.max(combinedTargets['mouthOpen'] || 0, val * 0.2);
+            break;
         }
       }
     });
 
     // Subtle natural speaking presence: if speaking but between syllables, hold relaxed conversational parting
     if (isSpeaking && maxSpeechActivity < 0.05) {
-      combinedTargets['jawOpen'] = Math.max(combinedTargets['jawOpen'] || 0, 0.04);
-      combinedTargets['mouthOpen'] = Math.max(combinedTargets['mouthOpen'] || 0, 0.03);
+      combinedTargets['jawOpen'] = Math.max(combinedTargets['jawOpen'] || 0, 0.09);
+      combinedTargets['mouthOpen'] = Math.max(combinedTargets['mouthOpen'] || 0, 0.07);
     }
 
     // C. Blinking

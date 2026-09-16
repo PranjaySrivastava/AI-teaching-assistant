@@ -51,6 +51,129 @@ export default function Home() {
 
   // Ref that AvatarCanvas will populate with a function to forward word boundary events
   const onWordBoundaryRef = useRef<((word: string) => void) | null>(null);
+  // Persistent reference to prevent Chrome/V8 garbage collection mid-speech
+  const activeUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const speechSafetyTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const speakStatement = (statementText: string) => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+      setIsSpeaking(true);
+      setTimeout(
+        () => {
+          setIsSpeaking(false);
+          setActivePhonemes(null);
+          setSentiment('encouraging');
+        },
+        Math.min(12000, Math.max(3000, statementText.split(/\s+/).length * 320))
+      );
+      return;
+    }
+
+    try {
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.resume();
+    } catch {}
+
+    if (speechSafetyTimerRef.current) {
+      clearTimeout(speechSafetyTimerRef.current);
+      speechSafetyTimerRef.current = null;
+    }
+
+    const utterance = new SpeechSynthesisUtterance(statementText);
+    activeUtteranceRef.current = utterance;
+    (window as any).__activeUtterance = utterance;
+
+    utterance.rate = 1.02;
+    utterance.pitch = 1.0;
+
+    // Pick natural, expressive voice if available
+    const selectBestVoice = () => {
+      const voices = window.speechSynthesis.getVoices();
+      if (!voices || voices.length === 0) return null;
+      return (
+        voices.find(
+          (v) =>
+            v.lang.startsWith('en') &&
+            (v.name.includes('Natural') ||
+              v.name.includes('Google') ||
+              v.name.includes('Jenny') ||
+              v.name.includes('Aria') ||
+              v.name.includes('Guy') ||
+              v.name.includes('Zira') ||
+              v.name.includes('Samantha') ||
+              v.name.includes('David'))
+        ) ||
+        voices.find((v) => v.lang.startsWith('en')) ||
+        voices[0]
+      );
+    };
+
+    const bestVoice = selectBestVoice();
+    if (bestVoice) utterance.voice = bestVoice;
+
+    if (window.speechSynthesis.onvoiceschanged === null) {
+      window.speechSynthesis.onvoiceschanged = () => {
+        const v = selectBestVoice();
+        if (v && activeUtteranceRef.current) {
+          activeUtteranceRef.current.voice = v;
+        }
+      };
+    }
+
+    utterance.onstart = () => {
+      setIsSpeaking(true);
+    };
+
+    utterance.onboundary = (ev) => {
+      if (ev.name === 'word') {
+        const remainder = statementText.slice(ev.charIndex);
+        const match = remainder.match(/^[\w']+/);
+        const word = match ? match[0] : '';
+        if (word) {
+          onWordBoundaryRef.current?.(word);
+        }
+      }
+    };
+
+    utterance.onend = () => {
+      setIsSpeaking(false);
+      setActivePhonemes(null);
+      setSentiment('encouraging');
+      activeUtteranceRef.current = null;
+    };
+
+    utterance.onerror = (ev) => {
+      console.warn('Speech synthesis finished or canceled:', ev);
+      setIsSpeaking(false);
+      setActivePhonemes(null);
+      setSentiment('idle');
+      activeUtteranceRef.current = null;
+    };
+
+    window.speechSynthesis.speak(utterance);
+    try {
+      window.speechSynthesis.resume();
+    } catch {}
+
+    // Safety fallback: ensure isSpeaking becomes true even if onstart event is delayed
+    speechSafetyTimerRef.current = setTimeout(() => {
+      if (activeUtteranceRef.current === utterance) {
+        setIsSpeaking(true);
+      }
+    }, 150);
+
+    // Keep-alive for longer pedagogical explanations to counter Chromium's 15s pause bug
+    const keepAlive = setInterval(() => {
+      if (!window.speechSynthesis.speaking || activeUtteranceRef.current !== utterance) {
+        clearInterval(keepAlive);
+      } else {
+        try {
+          window.speechSynthesis.pause();
+          window.speechSynthesis.resume();
+        } catch {}
+      }
+    }, 8000);
+  };
 
   const askQuestion = async (queryText: string) => {
     const q = queryText.trim();
@@ -85,51 +208,12 @@ export default function Home() {
         setAlgorithmTitle(data.visualSequence.title);
       }
 
-      // Generate phonemes as fallback timeline; the real sync will come from onboundary events
+      // Generate phonemes timeline for fallback and background timing
       const phonemes = generatePhonemesFromText(answer, 1.05);
       setActivePhonemes(phonemes);
 
-      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(answer);
-        utterance.rate = 1.05;
-        utterance.pitch = 1.0;
-
-        // Only start mouth animation exactly when audio begins
-        utterance.onstart = () => {
-          setIsSpeaking(true);
-        };
-
-        // Real-time word-level sync — fires at the exact moment each word is spoken
-        utterance.onboundary = (ev) => {
-          if (ev.name === 'word') {
-            const remainder = answer.slice(ev.charIndex);
-            const match = remainder.match(/^[\w']+/);
-            const word = match ? match[0] : '';
-            if (word) onWordBoundaryRef.current?.(word);
-          }
-        };
-
-        utterance.onend = () => {
-          setIsSpeaking(false);
-          setActivePhonemes(null);
-          setSentiment('encouraging');
-        };
-        utterance.onerror = () => {
-          setIsSpeaking(false);
-          setActivePhonemes(null);
-          setSentiment('idle');
-        };
-
-        window.speechSynthesis.speak(utterance);
-      } else {
-        setIsSpeaking(true);
-        setTimeout(() => {
-          setIsSpeaking(false);
-          setActivePhonemes(null);
-          setSentiment('encouraging');
-        }, 4000);
-      }
+      // Speak live statement with real-time word boundary lip-sync
+      speakStatement(answer);
     } catch (err) {
       console.warn('Backend query error, using local fallback:', err);
       const fallbackAnswer = `Let us analyze ${q}. In computer science, we examine the problem constraints and asymptotic complexity to formulate the optimal approach.`;
@@ -138,45 +222,7 @@ export default function Home() {
       const phonemes = generatePhonemesFromText(fallbackAnswer, 1.05);
       setActivePhonemes(phonemes);
 
-      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(fallbackAnswer);
-        utterance.rate = 1.05;
-        utterance.pitch = 1.0;
-
-        utterance.onstart = () => {
-          setIsSpeaking(true);
-        };
-
-        utterance.onboundary = (ev) => {
-          if (ev.name === 'word') {
-            const remainder = fallbackAnswer.slice(ev.charIndex);
-            const match = remainder.match(/^[\w']+/);
-            const word = match ? match[0] : '';
-            if (word) onWordBoundaryRef.current?.(word);
-          }
-        };
-
-        utterance.onend = () => {
-          setIsSpeaking(false);
-          setActivePhonemes(null);
-          setSentiment('encouraging');
-        };
-        utterance.onerror = () => {
-          setIsSpeaking(false);
-          setActivePhonemes(null);
-          setSentiment('idle');
-        };
-
-        window.speechSynthesis.speak(utterance);
-      } else {
-        setIsSpeaking(true);
-        setTimeout(() => {
-          setIsSpeaking(false);
-          setActivePhonemes(null);
-          setSentiment('encouraging');
-        }, 3000);
-      }
+      speakStatement(fallbackAnswer);
     }
   };
 

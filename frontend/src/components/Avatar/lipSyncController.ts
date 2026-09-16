@@ -356,19 +356,22 @@ export class LipSyncController {
 
     // PRIORITY 2: Pre-generated phoneme timeline
     // Acts as fill-in between boundary events and as a complete fallback for browsers
-    // (like iOS Safari) that never fire onboundary events at all.
+    // (like iOS Safari or local SAPI) that never fire onboundary events at all.
     if (this.isPlaying && this.playbackStartTime !== null && this.phonemeTimeline.length > 0) {
       const elapsed = currentTimeSec - this.playbackStartTime;
       const lastPhoneme = this.phonemeTimeline[this.phonemeTimeline.length - 1];
 
-      if (lastPhoneme && elapsed > lastPhoneme.end + 0.3) {
-        this.stop();
-      } else if (this.currentWordPhonemes.length === 0) {
+      // If speech is still ongoing past timeline duration, wrap elapsed so the mouth
+      // continues animating smoothly until the audio actually finishes (stop() is called on utterance.onend)
+      const totalDuration = lastPhoneme ? lastPhoneme.end : 1.0;
+      const effectiveElapsed = elapsed > totalDuration ? elapsed % totalDuration : elapsed;
+
+      if (this.currentWordPhonemes.length === 0) {
         // Only use timeline weights when no boundary-event phonemes are active
         for (const p of this.phonemeTimeline) {
-          if (elapsed >= p.start && elapsed <= p.end) {
+          if (effectiveElapsed >= p.start && effectiveElapsed <= p.end) {
             const viseme = PHONEME_TO_VISEME[p.phoneme] || 'viseme_aa';
-            const w = calculateWeight(p.start, p.end, elapsed) * 0.82;
+            const w = calculateWeight(p.start, p.end, effectiveElapsed) * 0.95;
             // Don't override a higher boundary-event weight
             if (!targetWeights.has(viseme)) {
               targetWeights.set(viseme, w);
@@ -389,10 +392,10 @@ export class LipSyncController {
       targetWeights.set('viseme_O', openWeight * 0.25);
     }
 
-    // Single-pass exponential dampening filter (Attack ~55ms, Decay ~80ms)
-    // Matches default_blend_duration_ms (60ms) from viseme_timing.json
-    const attackRate = Math.min(1.0, deltaTime * 18.0);
-    const decayRate = Math.min(1.0, deltaTime * 12.0);
+    // Fast, responsive exponential dampening filter (Attack ~40ms, Decay ~65ms)
+    // Provides crisp, distinct articulation for rapid conversational consonants and vowels
+    const attackRate = Math.min(1.0, deltaTime * 24.0);
+    const decayRate = Math.min(1.0, deltaTime * 16.0);
 
     const allKeys = new Set<string>();
     this.currentVisemeWeights.forEach((_, k) => allKeys.add(k));

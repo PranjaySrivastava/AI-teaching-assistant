@@ -89,11 +89,10 @@ export const AvatarSection: React.FC<AvatarSectionProps> = ({
       window.speechSynthesis.cancel();
       try {
         window.speechSynthesis.resume();
-      } catch {
-        // Safe ignore
-      }
+      } catch {}
 
       const utterance = new SpeechSynthesisUtterance(testSentence);
+      (window as any).__activeTestUtterance = utterance;
       utterance.rate = 1.0;
       utterance.pitch = 1.0;
 
@@ -104,6 +103,9 @@ export const AvatarSection: React.FC<AvatarSectionProps> = ({
           v.lang.startsWith('en') &&
           (v.name.includes('Natural') ||
             v.name.includes('Google') ||
+            v.name.includes('Jenny') ||
+            v.name.includes('Aria') ||
+            v.name.includes('Guy') ||
             v.name.includes('Zira') ||
             v.name.includes('Samantha') ||
             v.name.includes('David'))
@@ -129,15 +131,20 @@ export const AvatarSection: React.FC<AvatarSectionProps> = ({
         setIsSpeakingTest(false);
         setInternalPhonemes(null);
         setSentiment('encouraging');
+        (window as any).__activeTestUtterance = null;
       };
 
       utterance.onerror = () => {
         setIsSpeakingTest(false);
         setInternalPhonemes(null);
         setSentiment('idle');
+        (window as any).__activeTestUtterance = null;
       };
 
       window.speechSynthesis.speak(utterance);
+      try {
+        window.speechSynthesis.resume();
+      } catch {}
     } else {
       setIsSpeakingTest(true);
       setTimeout(() => {
