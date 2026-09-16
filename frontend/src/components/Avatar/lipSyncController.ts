@@ -244,19 +244,15 @@ export class LipSyncController {
   private currentWordPhonemes: { viseme: string; start: number; end: number }[] = [];
 
   /**
-   * Called on utterance.onboundary.
-   * If a timeline is already playing, boundary events adjust playback offset for precision sync.
-   * If no timeline is active, generates real-time phonemes for the spoken word.
+   * Called on utterance.onboundary with the word being spoken right now.
+   * Always accepts boundary events — they are real-time audio-locked and
+   * take highest priority over any pre-generated phoneme timeline.
    */
   public setActiveVisemeFromWord(word: string, currentTimeSec: number) {
     const clean = word.toLowerCase().replace(/[^a-z]/g, '');
     if (!clean) return;
 
-    // If timeline is playing, avoid blowing away the timeline
-    if (this.isPlaying && this.phonemeTimeline.length > 0) {
-      return;
-    }
-
+    // Generate per-phoneme timing for this specific word, starting RIGHT NOW
     const phonemes = generatePhonemesFromText(clean, 1.0);
     if (phonemes && phonemes.length > 0) {
       this.currentWordPhonemes = phonemes.map((p) => ({
@@ -265,16 +261,21 @@ export class LipSyncController {
         end: currentTimeSec + p.end,
       }));
     } else {
+      // Single-phoneme fallback for very short words
       let phoneme = 'AH';
       const c = clean[0];
       if ('aeiou'.includes(c)) phoneme = 'AA';
       else if ('pb'.includes(c)) phoneme = 'PP';
       else if ('fv'.includes(c)) phoneme = 'FF';
+      else if ('sz'.includes(c)) phoneme = 'S';
+      else if ('nm'.includes(c)) phoneme = 'N';
+      else if (c === 'r') phoneme = 'R';
+      else if ('td'.includes(c)) phoneme = 'T';
       this.currentWordPhonemes = [
         {
           viseme: PHONEME_TO_VISEME[phoneme] || 'viseme_aa',
           start: currentTimeSec,
-          end: currentTimeSec + 0.18,
+          end: currentTimeSec + 0.2,
         },
       ];
     }
@@ -335,34 +336,45 @@ export class LipSyncController {
       }
     };
 
-    // 1. Play from timeline if active
+    // PRIORITY 1: Real-time word boundary events (audio-locked, fire at exact moment of speech)
+    // These always override the pre-generated timeline for accurate synchronisation.
+    if (this.currentWordPhonemes.length > 0) {
+      let anyActive = false;
+      for (const p of this.currentWordPhonemes) {
+        if (currentTimeSec >= p.start && currentTimeSec <= p.end) {
+          const w = calculateWeight(p.start, p.end, currentTimeSec) * 0.9;
+          targetWeights.set(p.viseme, Math.max(targetWeights.get(p.viseme) || 0, w));
+          anyActive = true;
+        }
+      }
+      const last = this.currentWordPhonemes[this.currentWordPhonemes.length - 1];
+      // Expire word phonemes 120ms after the word finishes so the timeline can fill in
+      if (last && currentTimeSec > last.end + 0.12) {
+        this.currentWordPhonemes = [];
+      }
+    }
+
+    // PRIORITY 2: Pre-generated phoneme timeline
+    // Acts as fill-in between boundary events and as a complete fallback for browsers
+    // (like iOS Safari) that never fire onboundary events at all.
     if (this.isPlaying && this.playbackStartTime !== null && this.phonemeTimeline.length > 0) {
       const elapsed = currentTimeSec - this.playbackStartTime;
       const lastPhoneme = this.phonemeTimeline[this.phonemeTimeline.length - 1];
 
-      if (lastPhoneme && elapsed > lastPhoneme.end + 0.2) {
+      if (lastPhoneme && elapsed > lastPhoneme.end + 0.3) {
         this.stop();
-      } else {
+      } else if (this.currentWordPhonemes.length === 0) {
+        // Only use timeline weights when no boundary-event phonemes are active
         for (const p of this.phonemeTimeline) {
           if (elapsed >= p.start && elapsed <= p.end) {
             const viseme = PHONEME_TO_VISEME[p.phoneme] || 'viseme_aa';
-            const w = calculateWeight(p.start, p.end, elapsed) * 0.88;
-            targetWeights.set(viseme, Math.max(targetWeights.get(viseme) || 0, w));
+            const w = calculateWeight(p.start, p.end, elapsed) * 0.82;
+            // Don't override a higher boundary-event weight
+            if (!targetWeights.has(viseme)) {
+              targetWeights.set(viseme, w);
+            }
           }
         }
-      }
-    }
-    // 2. Play from live word stream if timeline is not active
-    else if (this.currentWordPhonemes.length > 0) {
-      for (const p of this.currentWordPhonemes) {
-        if (currentTimeSec >= p.start && currentTimeSec <= p.end) {
-          const w = calculateWeight(p.start, p.end, currentTimeSec) * 0.88;
-          targetWeights.set(p.viseme, Math.max(targetWeights.get(p.viseme) || 0, w));
-        }
-      }
-      const last = this.currentWordPhonemes[this.currentWordPhonemes.length - 1];
-      if (last && currentTimeSec > last.end + 0.1) {
-        this.currentWordPhonemes = [];
       }
     }
 

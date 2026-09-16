@@ -106,15 +106,19 @@ export const AvatarCanvas: React.FC<AvatarCanvasProps> = ({
     }
   }, [onWordBoundaryRef]);
 
-  // Play phoneme timeline (fallback) if provided; stop when speech ends
+  // Synchronise phoneme timeline and boundary-event mode with TTS audio onset.
+  // Called when isSpeaking flips or a new phoneme timeline arrives.
   useEffect(() => {
-    if (isSpeaking && phonemeTimeline && phonemeTimeline.length > 0) {
-      // Delay by one frame so the lip-sync controller is running before the TTS starts
-      const raf = requestAnimationFrame(() => {
+    if (isSpeaking) {
+      if (phonemeTimeline && phonemeTimeline.length > 0) {
+        // Start the pre-generated fallback timeline immediately at audio onset.
+        // Word boundary events will override this on a per-word basis (Priority 1 in LipSyncController).
         lipSyncCtrlRef.current?.playTimeline(phonemeTimeline, performance.now() / 1000);
-      });
-      return () => cancelAnimationFrame(raf);
-    } else if (!isSpeaking) {
+      }
+      // If no timeline is provided, boundary events alone will drive the mouth —
+      // the LipSyncController's currentWordPhonemes will be populated by onboundary callbacks.
+    } else {
+      // Audio finished — clear everything
       lipSyncCtrlRef.current?.stop();
     }
   }, [isSpeaking, phonemeTimeline]);
