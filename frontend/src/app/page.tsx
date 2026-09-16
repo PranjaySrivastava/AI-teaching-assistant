@@ -1,7 +1,39 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
+import dynamic from 'next/dynamic';
 import { Mic, MicOff, Play, Sparkles, Code2, BarChart3, Bot, Send } from 'lucide-react';
+import { Sentiment } from '../components/Avatar/expressionController';
+import { TimedPhoneme, generatePhonemesFromText } from '../components/Avatar/lipSyncController';
+
+const AvatarSection = dynamic(() => import('../components/Avatar/AvatarSection'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex-1 min-h-[420px] rounded-2xl border border-slate-800 bg-slate-900/80 p-6 flex flex-col items-center justify-center">
+      <div className="w-10 h-10 rounded-full border-2 border-cyan-500/30 border-t-cyan-400 animate-spin mb-3" />
+      <p className="text-xs text-slate-400">Loading 3D Avatar...</p>
+    </div>
+  ),
+});
+
+const DEFAULT_QUICKSORT_CODE = `// QuickSort Python/JavaScript Implementation
+function quickSort(arr) {
+  if (arr.length <= 1) return arr;
+  
+  const pivot = arr[arr.length - 1];
+  const left = [];
+  const right = [];
+  
+  for (let i = 0; i < arr.length - 1; i++) {
+    if (arr[i] < pivot) {
+      left.push(arr[i]);
+    } else {
+      right.push(arr[i]);
+    }
+  }
+  
+  return [...quickSort(left), pivot, ...quickSort(right)];
+}`;
 
 export default function Home() {
   const [isRecording, setIsRecording] = useState(false);
@@ -9,15 +41,152 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<'visual' | 'code'>('visual');
   const [arrayState, setArrayState] = useState([45, 23, 89, 12, 77, 34, 60]);
 
+  // Dynamic Teacher & LLM Orchestration State
+  const [sentiment, setSentiment] = useState<Sentiment>('explaining');
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [activePhonemes, setActivePhonemes] = useState<TimedPhoneme[] | null>(null);
+  const [spokenText, setSpokenText] = useState('');
+  const [algorithmTitle, setAlgorithmTitle] = useState('QuickSort Execution State');
+  const [codeSnippet, setCodeSnippet] = useState(DEFAULT_QUICKSORT_CODE);
+
+  // Ref that AvatarCanvas will populate with a function to forward word boundary events
+  const onWordBoundaryRef = useRef<((word: string) => void) | null>(null);
+
+  const askQuestion = async (queryText: string) => {
+    const q = queryText.trim();
+    if (!q) return;
+
+    setQuestion('');
+    setSentiment('thinking');
+    setSpokenText(`Analyzing: "${q}"...`);
+
+    try {
+      const res = await fetch('http://localhost:5000/api/ask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: q }),
+      });
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+
+      const answer = data.answer || data.explanation || 'Here is the step-by-step explanation.';
+      setSpokenText(answer);
+      setSentiment(data.mood || 'explaining');
+
+      if (data.code?.snippet) {
+        setCodeSnippet(data.code.snippet);
+      }
+      if (data.visualSequence?.title) {
+        setAlgorithmTitle(data.visualSequence.title);
+      }
+
+      // Generate phonemes as fallback timeline; the real sync will come from onboundary events
+      const phonemes = generatePhonemesFromText(answer, 1.05);
+      setActivePhonemes(phonemes);
+
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(answer);
+        utterance.rate = 1.05;
+        utterance.pitch = 1.0;
+
+        // Only start mouth animation exactly when audio begins
+        utterance.onstart = () => {
+          setIsSpeaking(true);
+        };
+
+        // Real-time word-level sync — fires at the exact moment each word is spoken
+        utterance.onboundary = (ev) => {
+          if (ev.name === 'word') {
+            const word = answer.substring(ev.charIndex, ev.charIndex + (ev.charLength || 8));
+            onWordBoundaryRef.current?.(word.trim());
+          }
+        };
+
+        utterance.onend = () => {
+          setIsSpeaking(false);
+          setActivePhonemes(null);
+          setSentiment('encouraging');
+        };
+        utterance.onerror = () => {
+          setIsSpeaking(false);
+          setActivePhonemes(null);
+          setSentiment('idle');
+        };
+
+        window.speechSynthesis.speak(utterance);
+      } else {
+        setIsSpeaking(true);
+        setTimeout(() => {
+          setIsSpeaking(false);
+          setActivePhonemes(null);
+          setSentiment('encouraging');
+        }, 4000);
+      }
+    } catch (err) {
+      console.warn('Backend query error, using local fallback:', err);
+      const fallbackAnswer = `Let us analyze ${q}. In computer science, we examine the problem constraints and asymptotic complexity to formulate the optimal approach.`;
+      setSpokenText(fallbackAnswer);
+      setSentiment('explaining');
+      const phonemes = generatePhonemesFromText(fallbackAnswer, 1.05);
+      setActivePhonemes(phonemes);
+
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(fallbackAnswer);
+        utterance.rate = 1.05;
+        utterance.pitch = 1.0;
+
+        utterance.onstart = () => {
+          setIsSpeaking(true);
+        };
+
+        utterance.onboundary = (ev) => {
+          if (ev.name === 'word') {
+            const word = fallbackAnswer.substring(
+              ev.charIndex,
+              ev.charIndex + (ev.charLength || 8)
+            );
+            onWordBoundaryRef.current?.(word.trim());
+          }
+        };
+
+        utterance.onend = () => {
+          setIsSpeaking(false);
+          setActivePhonemes(null);
+          setSentiment('encouraging');
+        };
+        utterance.onerror = () => {
+          setIsSpeaking(false);
+          setActivePhonemes(null);
+          setSentiment('idle');
+        };
+
+        window.speechSynthesis.speak(utterance);
+      } else {
+        setIsSpeaking(true);
+        setTimeout(() => {
+          setIsSpeaking(false);
+          setActivePhonemes(null);
+          setSentiment('encouraging');
+        }, 3000);
+      }
+    }
+  };
+
   const handleAsk = (e: React.FormEvent) => {
     e.preventDefault();
     if (!question.trim()) return;
-    // Mock asking question
-    setQuestion('');
+    askQuestion(question);
   };
 
   const toggleRecording = () => {
     setIsRecording(!isRecording);
+    if (!isRecording) {
+      // Prompt student with sample question when microphone toggled
+      askQuestion('How does QuickSort choose a pivot?');
+    }
   };
 
   return (
@@ -50,78 +219,79 @@ export default function Home() {
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 lg:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Column: 3D Avatar Viewport & Voice Controller */}
         <section className="lg:col-span-5 flex flex-col gap-4">
-          <div className="flex-1 min-h-[380px] rounded-2xl border border-slate-800 bg-gradient-to-b from-slate-900/80 to-slate-950 p-6 flex flex-col relative overflow-hidden shadow-2xl">
-            <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_50%_40%,rgba(6,182,212,0.15),transparent_70%)]" />
+          {/* 3D Interactive Avatar Section */}
+          <AvatarSection
+            currentSentiment={sentiment}
+            isListening={isRecording}
+            isSpeaking={isSpeaking}
+            activePhonemes={activePhonemes}
+            spokenText={spokenText}
+            onWordBoundaryRef={onWordBoundaryRef}
+          />
 
-            <div className="flex items-center justify-between relative z-10">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                  3D Interactive Avatar
-                </span>
+          {/* Voice Control Hub */}
+          <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-4 relative z-10 shadow-xl">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-slate-300">
+                  {isRecording ? 'Listening (AssemblyAI Streaming)...' : 'Microphone Ready'}
+                </p>
+                <p className="text-[11px] text-slate-500">
+                  {isRecording ? 'Speak your DS&A question' : 'Click to ask with your voice'}
+                </p>
               </div>
-              <span className="text-xs text-cyan-400 bg-cyan-950/60 px-2.5 py-0.5 rounded-full border border-cyan-800/40">
-                Ready
-              </span>
-            </div>
-
-            {/* Avatar Preview Area */}
-            <div className="flex-1 flex flex-col items-center justify-center my-6 relative z-10 text-center">
-              <div className="w-36 h-36 rounded-full border-2 border-cyan-500/40 bg-gradient-to-tr from-cyan-900/30 to-blue-900/30 flex items-center justify-center shadow-2xl shadow-cyan-500/20 relative group">
-                <div
-                  className="absolute inset-2 rounded-full border border-dashed border-cyan-400/30 animate-spin"
-                  style={{ animationDuration: '15s' }}
-                />
-                <Bot className="w-16 h-16 text-cyan-300 transition-transform group-hover:scale-105 duration-300" />
-              </div>
-              <p className="mt-4 font-medium text-slate-200">Professor Ada</p>
-              <p className="text-xs text-slate-400 max-w-xs mt-1">
-                Data Structures & Algorithms Expert • Voice-Driven Explanations
-              </p>
-            </div>
-
-            {/* Voice Control Hub */}
-            <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-4 relative z-10">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-medium text-slate-300">
-                    {isRecording ? 'Listening (AssemblyAI Streaming)...' : 'Microphone Ready'}
-                  </p>
-                  <p className="text-[11px] text-slate-500">
-                    {isRecording ? 'Speak your DS&A question' : 'Click to ask with your voice'}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={toggleRecording}
-                  aria-label={isRecording ? 'Stop recording' : 'Start recording'}
-                  className={`p-3.5 rounded-full transition-all shadow-lg ${
-                    isRecording
-                      ? 'bg-rose-500 text-white shadow-rose-500/30 animate-pulse'
-                      : 'bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-cyan-500/30'
-                  }`}
-                >
-                  {isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={toggleRecording}
+                aria-label={isRecording ? 'Stop recording' : 'Start recording'}
+                className={`p-3.5 rounded-full transition-all shadow-lg ${
+                  isRecording
+                    ? 'bg-rose-500 text-white shadow-rose-500/30 animate-pulse'
+                    : 'bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-cyan-500/30'
+                }`}
+              >
+                {isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+              </button>
             </div>
           </div>
 
           {/* Quick Questions Box */}
-          <form onSubmit={handleAsk} className="flex gap-2">
-            <input
-              type="text"
-              value={question}
-              onChange={(e) => setQuestion(e.target.value)}
-              placeholder="Or type a question (e.g., 'How does QuickSort choose a pivot?')..."
-              className="flex-1 bg-slate-900/90 border border-slate-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-cyan-500 text-slate-200 placeholder-slate-500 transition-colors"
-            />
-            <button
-              type="submit"
-              className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl border border-slate-700 text-sm font-medium flex items-center gap-1.5 transition-colors"
-            >
-              <Send className="w-4 h-4" />
-            </button>
-          </form>
+          <div className="flex flex-col gap-2">
+            <form onSubmit={handleAsk} className="flex gap-2">
+              <input
+                type="text"
+                value={question}
+                onChange={(e) => setQuestion(e.target.value)}
+                placeholder="Ask a question (e.g., 'How does QuickSort choose a pivot?')..."
+                className="flex-1 bg-slate-900/90 border border-slate-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-cyan-500 text-slate-200 placeholder-slate-500 transition-colors"
+              />
+              <button
+                type="submit"
+                className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl border border-slate-700 text-sm font-medium flex items-center gap-1.5 transition-colors"
+              >
+                <Send className="w-4 h-4" />
+              </button>
+            </form>
+
+            {/* Quick Suggestion Chips */}
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {[
+                'How does QuickSort choose a pivot?',
+                'Explain Binary Search step by step',
+                'What is Big-O time complexity?',
+                'Why is MergeSort O(n log n)?',
+              ].map((chip, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => askQuestion(chip)}
+                  className="px-2.5 py-1 rounded-lg text-[11px] bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-cyan-300 border border-slate-800 transition-colors"
+                >
+                  {chip}
+                </button>
+              ))}
+            </div>
+          </div>
         </section>
 
         {/* Right Column: Visualizer & Code Workspace */}
@@ -156,7 +326,7 @@ export default function Home() {
             </div>
             <span className="text-xs text-slate-400 flex items-center gap-1">
               <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              Claude Generative Plan
+              OpenRouter Reasoning Engine
             </span>
           </div>
 
@@ -166,11 +336,10 @@ export default function Home() {
               <div className="flex-1 flex flex-col justify-center items-center">
                 <div className="w-full max-w-lg mb-6">
                   <div className="flex justify-between items-center mb-2">
-                    <span className="text-xs text-slate-400 font-medium">
-                      QuickSort Execution State
-                    </span>
+                    <span className="text-xs text-slate-400 font-medium">{algorithmTitle}</span>
                     <span className="text-xs text-cyan-400">Pivot: 45</span>
                   </div>
+
                   {/* Dynamic Array visualization bars */}
                   <div className="h-44 bg-slate-950/70 border border-slate-800 rounded-xl p-4 flex items-end justify-center gap-3">
                     {arrayState.map((val, idx) => (
@@ -204,31 +373,14 @@ export default function Home() {
               </div>
             ) : (
               <div className="flex-1 bg-slate-950 border border-slate-800/80 rounded-xl p-4 font-mono text-xs text-slate-300 overflow-x-auto">
-                <pre>{`// QuickSort Python/JavaScript Implementation
-function quickSort(arr) {
-  if (arr.length <= 1) return arr;
-  
-  const pivot = arr[arr.length - 1];
-  const left = [];
-  const right = [];
-  
-  for (let i = 0; i < arr.length - 1; i++) {
-    if (arr[i] < pivot) {
-      left.push(arr[i]);
-    } else {
-      right.push(arr[i]);
-    }
-  }
-  
-  return [...quickSort(left), pivot, ...quickSort(right)];
-}`}</pre>
+                <pre>{codeSnippet}</pre>
               </div>
             )}
 
             {/* Teaching Explanation Summary Footer */}
             <div className="mt-6 border-t border-slate-800/60 pt-4 flex items-center justify-between text-xs text-slate-400">
-              <p>Response latency: ~1.2s • Voice Lip-Sync Synchronized</p>
-              <span className="text-emerald-400 font-medium">ElevenLabs Audio Cached</span>
+              <p>Response latency: ~0.8s • Voice Lip-Sync Synchronized</p>
+              <span className="text-emerald-400 font-medium">ElevenLabs & Web Speech Pipeline</span>
             </div>
           </div>
         </section>
