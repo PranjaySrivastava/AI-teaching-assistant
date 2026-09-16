@@ -16,6 +16,8 @@ interface AvatarCanvasProps {
   onError?: (err: unknown) => void;
   /** Called with each TTS word boundary so lip-sync can be driven in real time */
   onWordBoundaryRef?: React.MutableRefObject<((word: string) => void) | null>;
+  /** Spoken statement text for zero-lag phoneme pre-computation */
+  spokenText?: string;
 }
 
 // Procedural studio lighting environment map for realistic PBR reflections
@@ -52,6 +54,7 @@ export const AvatarCanvas: React.FC<AvatarCanvasProps> = ({
   onLoaded,
   onError,
   onWordBoundaryRef,
+  spokenText,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [loadProgress, setLoadProgress] = useState<number>(0);
@@ -69,6 +72,13 @@ export const AvatarCanvas: React.FC<AvatarCanvasProps> = ({
   if (!lipSyncCtrlRef.current) {
     lipSyncCtrlRef.current = new LipSyncController();
   }
+
+  // Pre-calculate all phonemes for the spoken text upfront (Zero-Lag Solution 1)
+  useEffect(() => {
+    if (spokenText) {
+      lipSyncCtrlRef.current?.precomputePhonemes(spokenText);
+    }
+  }, [spokenText]);
 
   // Update sentiment when prop changes
   useEffect(() => {

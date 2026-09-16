@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import { Mic, MicOff, Play, Sparkles, Code2, BarChart3, Bot, Send } from 'lucide-react';
 import { Sentiment } from '../components/Avatar/expressionController';
 import { TimedPhoneme, generatePhonemesFromText } from '../components/Avatar/lipSyncController';
+import { assemblyAiStream } from '../services/assemblyAiStream';
 
 const AvatarSection = dynamic(() => import('../components/Avatar/AvatarSection'), {
   ssr: false,
@@ -54,6 +55,8 @@ export default function Home() {
   // Persistent reference to prevent Chrome/V8 garbage collection mid-speech
   const activeUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const speechSafetyTimerRef = useRef<NodeJS.Timeout | null>(null);
+  // Reference for server audio playback (Option B: ElevenLabs)
+  const audioElementRef = useRef<HTMLAudioElement | null>(null);
 
   const speakStatement = (statementText: string) => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
@@ -208,12 +211,51 @@ export default function Home() {
         setAlgorithmTitle(data.visualSequence.title);
       }
 
-      // Generate phonemes timeline for fallback and background timing
-      const phonemes = generatePhonemesFromText(answer, 1.05);
-      setActivePhonemes(phonemes);
+      // Option B: Server Audio with ElevenLabs Timestamps (if returned from backend)
+      if (data.audioUrl && typeof data.audioUrl === 'string' && data.audioUrl.trim().length > 0) {
+        if (
+          data.phonemeTimings &&
+          Array.isArray(data.phonemeTimings) &&
+          data.phonemeTimings.length > 0
+        ) {
+          setActivePhonemes(data.phonemeTimings);
+        } else {
+          setActivePhonemes(generatePhonemesFromText(answer, 1.02));
+        }
 
-      // Speak live statement with real-time word boundary lip-sync
-      speakStatement(answer);
+        if (audioElementRef.current) {
+          audioElementRef.current.pause();
+          audioElementRef.current = null;
+        }
+
+        const audio = new Audio(data.audioUrl);
+        audioElementRef.current = audio;
+
+        audio.onplay = () => {
+          setIsSpeaking(true);
+        };
+        audio.onended = () => {
+          setIsSpeaking(false);
+          setActivePhonemes(null);
+          setSentiment('encouraging');
+          audioElementRef.current = null;
+        };
+        audio.onerror = () => {
+          console.warn('Error playing server audio, falling back to client speech synthesis');
+          audioElementRef.current = null;
+          speakStatement(answer);
+        };
+
+        audio.play().catch((err) => {
+          console.warn('Audio autoplay restricted, falling back to client speech synthesis:', err);
+          speakStatement(answer);
+        });
+      } else {
+        // Zero-Lag Procedural Phonemes + Real-time Word Boundary Sync
+        const phonemes = generatePhonemesFromText(answer, 1.05);
+        setActivePhonemes(phonemes);
+        speakStatement(answer);
+      }
     } catch (err) {
       console.warn('Backend query error, using local fallback:', err);
       const fallbackAnswer = `Let us analyze ${q}. In computer science, we examine the problem constraints and asymptotic complexity to formulate the optimal approach.`;
@@ -234,18 +276,8 @@ export default function Home() {
 
   const recognitionRef = useRef<any>(null);
 
-  const toggleRecording = () => {
-    if (isRecording) {
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.stop();
-        } catch {}
-      }
-      setIsRecording(false);
-      return;
-    }
-
-    // Support live voice input via browser SpeechRecognition API
+  // Fallback to browser SpeechRecognition if AssemblyAI WebSocket is not available
+  const startBrowserSpeechFallback = () => {
     if (typeof window !== 'undefined') {
       const SpeechRecognition =
         (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -294,12 +326,67 @@ export default function Home() {
       }
     }
 
-    // Fallback if microphone access is unavailable
+    // Ultimate fallback if microphone access is completely unavailable
     setIsRecording(true);
     setTimeout(() => {
       setIsRecording(false);
       askQuestion('How does QuickSort choose a pivot?');
     }, 1200);
+  };
+
+  const toggleRecording = () => {
+    if (isRecording) {
+      if (assemblyAiStream.getIsStreaming()) {
+        assemblyAiStream.stop();
+      }
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch {}
+      }
+      setIsRecording(false);
+      return;
+    }
+
+    const backendUrl =
+      process.env.NEXT_PUBLIC_BACKEND_URL ||
+      'https://ai-teaching-assistant-backend-service.onrender.com';
+
+    // Option A: Try AssemblyAI Real-Time WebSocket Streaming first
+    assemblyAiStream
+      .start(backendUrl, {
+        onPartialTranscript: (transcript) => {
+          if (transcript) setQuestion(transcript);
+        },
+        onFinalTranscript: (transcript) => {
+          if (transcript) {
+            setQuestion(transcript);
+            setIsRecording(false);
+            askQuestion(transcript);
+          }
+        },
+        onStateChange: (streaming) => {
+          setIsRecording(streaming);
+        },
+        onError: (err) => {
+          console.warn(
+            'AssemblyAI streaming error, falling back to browser SpeechRecognition:',
+            err.message
+          );
+          startBrowserSpeechFallback();
+        },
+      })
+      .then(() => {
+        setIsRecording(true);
+        setQuestion('Listening via AssemblyAI Streaming...');
+      })
+      .catch((err) => {
+        console.warn(
+          'AssemblyAI streaming setup failed, falling back to browser SpeechRecognition:',
+          err.message
+        );
+        startBrowserSpeechFallback();
+      });
   };
 
   return (

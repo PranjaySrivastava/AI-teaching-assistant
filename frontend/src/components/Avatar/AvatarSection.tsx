@@ -203,6 +203,7 @@ export const AvatarSection: React.FC<AvatarSectionProps> = ({
           phonemeTimeline={phonemes}
           showGlasses={showGlasses}
           onWordBoundaryRef={effectiveBoundaryRef}
+          spokenText={spokenText}
         />
 
         {/* Speaking Audio Indicator Overlay */}
