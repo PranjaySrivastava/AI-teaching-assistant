@@ -448,6 +448,7 @@ export default function Home() {
             activePhonemes={activePhonemes}
             spokenText={spokenText}
             onWordBoundaryRef={onWordBoundaryRef}
+            onSentimentChange={setSentiment}
           />
 
           {/* Voice Control Hub */}

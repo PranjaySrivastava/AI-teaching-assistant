@@ -23,6 +23,8 @@ export interface AvatarSectionProps {
   spokenText?: string;
   /** Ref whose .current is set to a function that forwards word boundary events to the lip-sync controller */
   onWordBoundaryRef?: React.MutableRefObject<((word: string) => void) | null>;
+  /** Callback fired when user selects a mood in the UI */
+  onSentimentChange?: (sentiment: Sentiment) => void;
 }
 
 const SENTIMENT_ICONS: Record<Sentiment, React.ComponentType<{ className?: string }>> = {
@@ -52,11 +54,17 @@ export const AvatarSection: React.FC<AvatarSectionProps> = ({
   activePhonemes: propPhonemes = null,
   spokenText,
   onWordBoundaryRef,
+  onSentimentChange,
 }) => {
   const [sentiment, setSentiment] = useState<Sentiment>(propSentiment || 'explaining');
   const [internalPhonemes, setInternalPhonemes] = useState<TimedPhoneme[] | null>(null);
   const [isSpeakingTest, setIsSpeakingTest] = useState<boolean>(false);
   const [showGlasses, setShowGlasses] = useState<boolean>(false);
+
+  const updateSentiment = (newMood: Sentiment) => {
+    setSentiment(newMood);
+    onSentimentChange?.(newMood);
+  };
 
   const isSpeaking = propIsSpeaking || isSpeakingTest;
   const phonemes = propPhonemes || internalPhonemes;
@@ -261,10 +269,11 @@ export const AvatarSection: React.FC<AvatarSectionProps> = ({
                 <button
                   key={mood}
                   type="button"
-                  onClick={() => setSentiment(mood)}
+                  onClick={() => updateSentiment(mood)}
+                  title={`Switch Avatar Expression to ${mood}`}
                   className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg text-[10px] font-medium capitalize transition-all border ${
                     isSelected
-                      ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 shadow-sm shadow-cyan-500/10'
+                      ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 shadow-sm shadow-cyan-500/10 scale-105'
                       : 'bg-slate-900/60 hover:bg-slate-800 text-slate-400 border-slate-800/80 hover:text-slate-200'
                   }`}
                 >

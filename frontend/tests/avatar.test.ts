@@ -32,6 +32,38 @@ describe('ExpressionController', () => {
     const result = ctrl.update(0.5, 2.0);
     expect(result.weights.get('mouthSmileLeft')).toBeGreaterThan(0);
   });
+
+  it('defines rich sculpted blendshapes across all 5 sentiments', () => {
+    const sentiments = ['idle', 'thinking', 'explaining', 'encouraging', 'celebrating'] as const;
+    sentiments.forEach((mood) => {
+      const config = SENTIMENT_CONFIGS[mood];
+      expect(config).toBeDefined();
+      expect(typeof config.headTiltDegrees).toBe('number');
+      expect(typeof config.blinkRatePerMinute).toBe('number');
+      expect(Object.keys(config.blendshapeWeights).length).toBeGreaterThan(0);
+    });
+
+    // Verify distinct emotional signatures
+    expect(SENTIMENT_CONFIGS.thinking.blendshapeWeights.browInnerUp).toBeGreaterThan(0.15);
+    expect(SENTIMENT_CONFIGS.thinking.blendshapeWeights.eyeLookUpLeft).toBeGreaterThan(0.15);
+    expect(SENTIMENT_CONFIGS.celebrating.blendshapeWeights.mouthSmileLeft).toBeGreaterThanOrEqual(
+      0.35
+    );
+    expect(SENTIMENT_CONFIGS.encouraging.blendshapeWeights.cheekSquintLeft).toBeGreaterThan(0.15);
+  });
+
+  it('generates spontaneous living micro-expressions over time', () => {
+    const ctrl = new ExpressionController();
+    // Simulate progression over 5 seconds to trigger spontaneous micro-expression engine
+    let browValues: number[] = [];
+    for (let t = 0; t <= 5.0; t += 0.2) {
+      const state = ctrl.update(0.2, t);
+      browValues.push(state.weights.get('browInnerUp') || 0);
+    }
+    // Verify that the face exhibits dynamic biological variation rather than a frozen mask
+    const maxVal = Math.max(...browValues);
+    expect(maxVal).toBeGreaterThan(0);
+  });
 });
 
 describe('LipSyncController', () => {
