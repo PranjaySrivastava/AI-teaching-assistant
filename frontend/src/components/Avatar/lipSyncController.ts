@@ -206,10 +206,14 @@ export function generatePhonemesFromText(text: string, speechRate = 1.0): TimedP
       continue;
     }
 
+    const isFunctionWord =
+      /^(the|a|an|of|to|in|is|it|and|or|we|for|at|on|by|as|so|if|this|that|with)$/.test(cleanWord);
+    const effectiveRate = isFunctionWord ? speechRate * 1.15 : speechRate;
+
     let i = 0;
     while (i < cleanWord.length) {
       let phoneme = 'AH';
-      let duration = 0.085 / speechRate;
+      let duration = 0.085 / effectiveRate;
       let step = 1;
 
       // 1. Check 4-letter suffix endings (e.g. "tion", "sion")
@@ -218,7 +222,7 @@ export function generatePhonemesFromText(text: string, speechRate = 1.0): TimedP
         (cleanWord.slice(i, i + 4) === 'tion' || cleanWord.slice(i, i + 4) === 'sion')
       ) {
         phoneme = 'CH';
-        duration = 0.12 / speechRate;
+        duration = 0.12 / effectiveRate;
         step = 4;
       }
       // 2. Check 2-letter digraphs & diphthongs
@@ -226,68 +230,68 @@ export function generatePhonemesFromText(text: string, speechRate = 1.0): TimedP
         const pair = cleanWord.substring(i, i + 2);
         if (pair === 'th') {
           phoneme = 'TH';
-          duration = 0.095 / speechRate;
+          duration = 0.095 / effectiveRate;
           step = 2;
         } else if (pair === 'sh' || pair === 'ch') {
           phoneme = 'CH';
-          duration = 0.1 / speechRate;
+          duration = 0.1 / effectiveRate;
           step = 2;
         } else if (pair === 'ph') {
           phoneme = 'FF';
-          duration = 0.09 / speechRate;
+          duration = 0.09 / effectiveRate;
           step = 2;
         } else if (pair === 'qu') {
           phoneme = 'K';
-          duration = 0.095 / speechRate;
+          duration = 0.095 / effectiveRate;
           step = 2;
         } else if (pair === 'ck') {
           phoneme = 'K';
-          duration = 0.085 / speechRate;
+          duration = 0.085 / effectiveRate;
           step = 2;
         } else if (pair === 'ng') {
           phoneme = 'NG';
-          duration = 0.09 / speechRate;
+          duration = 0.09 / effectiveRate;
           step = 2;
         } else if (pair === 'wh') {
           phoneme = 'W';
-          duration = 0.09 / speechRate;
+          duration = 0.09 / effectiveRate;
           step = 2;
         } else if (pair === 'ee' || pair === 'ea') {
           phoneme = 'EE';
-          duration = 0.13 / speechRate;
+          duration = 0.13 / effectiveRate;
           step = 2;
         } else if (pair === 'oo' || pair === 'ou') {
           phoneme = 'UW';
-          duration = 0.12 / speechRate;
+          duration = 0.12 / effectiveRate;
           step = 2;
         } else if (pair === 'ai' || pair === 'ay') {
           phoneme = 'AY';
-          duration = 0.12 / speechRate;
+          duration = 0.12 / effectiveRate;
           step = 2;
         } else if (pair === 'oi' || pair === 'oy') {
           phoneme = 'OY';
-          duration = 0.12 / speechRate;
+          duration = 0.12 / effectiveRate;
           step = 2;
         } else if (pair === 'oa' || pair === 'ow') {
           phoneme = 'OW';
-          duration = 0.12 / speechRate;
+          duration = 0.12 / effectiveRate;
           step = 2;
         } else if (pair === 'er' || pair === 'ir' || pair === 'ur') {
           phoneme = 'ER';
-          duration = 0.11 / speechRate;
+          duration = 0.11 / effectiveRate;
           step = 2;
         } else if (pair === 'ar') {
           phoneme = 'AA';
-          duration = 0.12 / speechRate;
+          duration = 0.12 / effectiveRate;
           step = 2;
         } else if (pair === 'or') {
           phoneme = 'AO';
-          duration = 0.12 / speechRate;
+          duration = 0.12 / effectiveRate;
           step = 2;
         } else {
           // Fall through to single-letter mapping
           const ch = cleanWord[i];
-          const mapped = mapSingleChar(ch, speechRate);
+          const mapped = mapSingleChar(ch, effectiveRate);
           phoneme = mapped.phoneme;
           duration = mapped.duration;
           step = 1;
@@ -295,7 +299,7 @@ export function generatePhonemesFromText(text: string, speechRate = 1.0): TimedP
       } else {
         // Single letter at end of word
         const ch = cleanWord[i];
-        const mapped = mapSingleChar(ch, speechRate);
+        const mapped = mapSingleChar(ch, effectiveRate);
         phoneme = mapped.phoneme;
         duration = mapped.duration;
         step = 1;
@@ -307,8 +311,8 @@ export function generatePhonemesFromText(text: string, speechRate = 1.0): TimedP
         end: currentTime + duration,
       });
 
-      // 20ms natural coarticulation blend
-      currentTime += Math.max(0.02, duration - 0.02 / speechRate);
+      // 20ms natural coarticulation blend with continuous overlap
+      currentTime += Math.max(0.02, duration - 0.02 / effectiveRate);
       i += step;
     }
 
@@ -460,20 +464,12 @@ export class LipSyncController {
   public update(deltaTime: number, currentTimeSec: number): Map<string, number> {
     const targetWeights = new Map<string, number>();
 
-    // Smooth cubic attack-sustain-release envelope (60ms transition per viseme_timing.json)
+    // Physiological bell-curve envelope with smooth vocal tract acceleration & deceleration
     const calculateWeight = (start: number, end: number, time: number): number => {
       const duration = Math.max(0.02, end - start);
       const progress = (time - start) / duration;
       if (progress <= 0.0 || progress >= 1.0) return 0;
-      if (progress < 0.25) {
-        const t = progress / 0.25;
-        return t * t * (3 - 2 * t);
-      } else if (progress < 0.7) {
-        return 1.0;
-      } else {
-        const t = (1.0 - progress) / 0.3;
-        return t * t * (3 - 2 * t);
-      }
+      return Math.pow(Math.sin(progress * Math.PI), 1.2);
     };
 
     // PRIORITY 1: Real-time word boundary events (audio-locked, fire at exact moment of speech)
@@ -482,7 +478,7 @@ export class LipSyncController {
       let anyActive = false;
       for (const p of this.currentWordPhonemes) {
         if (currentTimeSec >= p.start && currentTimeSec <= p.end) {
-          const w = calculateWeight(p.start, p.end, currentTimeSec) * 0.9;
+          const w = calculateWeight(p.start, p.end, currentTimeSec) * 0.95;
           targetWeights.set(p.viseme, Math.max(targetWeights.get(p.viseme) || 0, w));
           anyActive = true;
         }
@@ -532,11 +528,9 @@ export class LipSyncController {
       targetWeights.set('viseme_O', openWeight * 0.25);
     }
 
-    // Fast, responsive exponential dampening filter (Attack ~40ms, Decay ~65ms)
-    // Provides crisp, distinct articulation for rapid conversational consonants and vowels
-    const attackRate = Math.min(1.0, deltaTime * 24.0);
-    const decayRate = Math.min(1.0, deltaTime * 16.0);
-
+    // Biological muscle response filter:
+    // Plosives/bilabials (PP) and dentals (DD, TH, FF) snap shut crisply (Attack ~34.0),
+    // vowels glide smoothly with natural vocal tract resonance (Decay ~18.0)
     const allKeys = new Set<string>();
     this.currentVisemeWeights.forEach((_, k) => allKeys.add(k));
     targetWeights.forEach((_, k) => allKeys.add(k));
@@ -544,10 +538,16 @@ export class LipSyncController {
     allKeys.forEach((key) => {
       const current = this.currentVisemeWeights.get(key) || 0;
       const target = targetWeights.get(key) || 0;
+      const isFastConsonant =
+        key === 'viseme_PP' || key === 'viseme_DD' || key === 'viseme_kk' || key === 'viseme_FF';
+      const attackRate = isFastConsonant
+        ? Math.min(1.0, deltaTime * 34.0)
+        : Math.min(1.0, deltaTime * 26.0);
+      const decayRate = Math.min(1.0, deltaTime * 18.0);
       const rate = target > current ? attackRate : decayRate;
       const nextVal = current + (target - current) * rate;
 
-      // Silence threshold cutoff to prevent micro-twitches (per viseme_timing.json)
+      // Silence threshold cutoff to prevent micro-twitches
       if (nextVal < 0.008 && target === 0) {
         this.currentVisemeWeights.delete(key);
       } else {

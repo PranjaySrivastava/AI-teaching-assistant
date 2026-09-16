@@ -26,6 +26,9 @@ export class AvatarModel {
   private targetSaccadeX = 0;
   private targetSaccadeY = 0;
 
+  // Viscoelastic muscle response smoothing for lifelike organic articulation
+  private smoothedTargets: Record<string, number> = {};
+
   // Toggle glasses visibility (defaults to false to showcase beautiful face)
   public showGlasses = false;
 
@@ -215,11 +218,8 @@ export class AvatarModel {
       combinedTargets[key] = (combinedTargets[key] || 0) + val;
     });
 
-    // B. Lip-sync visemes (apply authentic Oculus speech blendshapes)
-    // Head_Mesh, Teeth_Mesh, and Tongue_Mesh all natively contain sculpted Oculus visemes
-    // (viseme_aa, viseme_O, viseme_E, viseme_I, viseme_U, viseme_PP, viseme_FF, etc.)
-    // In addition, jawOpen and mouthOpen are articulated proportionally so that
-    // the jaw, teeth, and tongue part visibly and naturally in sync with the spoken words.
+    // B. Anatomical human speech blendshapes (Oculus Visemes + ARKit Muscular Synergies)
+    // Coordinated multi-muscle activation: orbicularis oris, depressor labii, mentalis, risorius, levator
     let maxSpeechActivity = 0;
     visemeWeights.forEach((val, key) => {
       if (val > 0.005) {
@@ -227,70 +227,256 @@ export class AvatarModel {
         maxSpeechActivity = Math.max(maxSpeechActivity, val);
 
         switch (key) {
-          case 'viseme_aa': // Broad open vowel ("father", "hot", "analyze")
-            combinedTargets['jawOpen'] = Math.max(combinedTargets['jawOpen'] || 0, val * 0.52);
-            combinedTargets['mouthOpen'] = Math.max(combinedTargets['mouthOpen'] || 0, val * 0.46);
+          case 'viseme_aa': // Broad unrounded open vowel ("father", "data", "algorithm", "analyze")
+            combinedTargets['jawOpen'] = Math.max(combinedTargets['jawOpen'] || 0, val * 0.54);
+            combinedTargets['mouthOpen'] = Math.max(combinedTargets['mouthOpen'] || 0, val * 0.44);
+            // Depressor labii draws lower lip down, exposing lower front teeth
+            combinedTargets['mouthLowerDownLeft'] = Math.max(
+              combinedTargets['mouthLowerDownLeft'] || 0,
+              val * 0.24
+            );
+            combinedTargets['mouthLowerDownRight'] = Math.max(
+              combinedTargets['mouthLowerDownRight'] || 0,
+              val * 0.22
+            );
+            // Subtle levator upper lip lift
+            combinedTargets['mouthUpperUpLeft'] = Math.max(
+              combinedTargets['mouthUpperUpLeft'] || 0,
+              val * 0.1
+            );
+            combinedTargets['mouthUpperUpRight'] = Math.max(
+              combinedTargets['mouthUpperUpRight'] || 0,
+              val * 0.08
+            );
+            // Cheek involvement
+            combinedTargets['cheekSquintLeft'] = Math.max(
+              combinedTargets['cheekSquintLeft'] || 0,
+              val * 0.08
+            );
+            combinedTargets['cheekSquintRight'] = Math.max(
+              combinedTargets['cheekSquintRight'] || 0,
+              val * 0.07
+            );
             break;
-          case 'viseme_O': // Rounded open vowel ("go", "algorithm", "all")
-            combinedTargets['jawOpen'] = Math.max(combinedTargets['jawOpen'] || 0, val * 0.44);
-            combinedTargets['mouthOpen'] = Math.max(combinedTargets['mouthOpen'] || 0, val * 0.38);
+
+          case 'viseme_O': // Rounded open-mid vowel ("sorting", "nodes", "growth", "all")
+            combinedTargets['jawOpen'] = Math.max(combinedTargets['jawOpen'] || 0, val * 0.42);
+            combinedTargets['mouthOpen'] = Math.max(combinedTargets['mouthOpen'] || 0, val * 0.36);
+            // Orbicularis oris creates true forward round funnel
             combinedTargets['mouthFunnel'] = Math.max(
               combinedTargets['mouthFunnel'] || 0,
-              val * 0.35
+              val * 0.38
             );
-            break;
-          case 'viseme_E': // Mid-front vowel ("bed", "say", "explain")
-            combinedTargets['jawOpen'] = Math.max(combinedTargets['jawOpen'] || 0, val * 0.34);
-            combinedTargets['mouthOpen'] = Math.max(combinedTargets['mouthOpen'] || 0, val * 0.3);
-            combinedTargets['mouthSmile'] = Math.max(
-              combinedTargets['mouthSmile'] || 0,
-              val * 0.15
-            );
-            break;
-          case 'viseme_I': // High-front vowel ("see", "it", "pivot")
-            combinedTargets['jawOpen'] = Math.max(combinedTargets['jawOpen'] || 0, val * 0.28);
-            combinedTargets['mouthOpen'] = Math.max(combinedTargets['mouthOpen'] || 0, val * 0.26);
-            combinedTargets['mouthSmile'] = Math.max(
-              combinedTargets['mouthSmile'] || 0,
-              val * 0.18
-            );
-            break;
-          case 'viseme_U': // High-back rounded vowel ("you", "choose", "two")
-            combinedTargets['jawOpen'] = Math.max(combinedTargets['jawOpen'] || 0, val * 0.26);
-            combinedTargets['mouthOpen'] = Math.max(combinedTargets['mouthOpen'] || 0, val * 0.22);
             combinedTargets['mouthPucker'] = Math.max(
               combinedTargets['mouthPucker'] || 0,
-              val * 0.35
+              val * 0.28
+            );
+            combinedTargets['mouthRollLower'] = Math.max(
+              combinedTargets['mouthRollLower'] || 0,
+              val * 0.08
             );
             break;
-          case 'viseme_PP': // Bilabial plosives (P, B, M) — lips seal firmly together
+
+          case 'viseme_E': // Front mid unrounded vowel ("explanation", "step", "element", "complexity")
+            combinedTargets['jawOpen'] = Math.max(combinedTargets['jawOpen'] || 0, val * 0.34);
+            combinedTargets['mouthOpen'] = Math.max(combinedTargets['mouthOpen'] || 0, val * 0.3);
+            // Risorius stretches mouth corners laterally
+            combinedTargets['mouthStretchLeft'] = Math.max(
+              combinedTargets['mouthStretchLeft'] || 0,
+              val * 0.22
+            );
+            combinedTargets['mouthStretchRight'] = Math.max(
+              combinedTargets['mouthStretchRight'] || 0,
+              val * 0.2
+            );
+            combinedTargets['mouthSmileLeft'] = Math.max(
+              combinedTargets['mouthSmileLeft'] || 0,
+              val * 0.12
+            );
+            combinedTargets['mouthSmileRight'] = Math.max(
+              combinedTargets['mouthSmileRight'] || 0,
+              val * 0.1
+            );
+            combinedTargets['mouthLowerDownLeft'] = Math.max(
+              combinedTargets['mouthLowerDownLeft'] || 0,
+              val * 0.14
+            );
+            combinedTargets['mouthLowerDownRight'] = Math.max(
+              combinedTargets['mouthLowerDownRight'] || 0,
+              val * 0.12
+            );
+            break;
+
+          case 'viseme_I': // Front high vowel ("binary", "pivot", "linear", "divide")
+            combinedTargets['jawOpen'] = Math.max(combinedTargets['jawOpen'] || 0, val * 0.28);
+            combinedTargets['mouthOpen'] = Math.max(combinedTargets['mouthOpen'] || 0, val * 0.25);
+            combinedTargets['mouthStretchLeft'] = Math.max(
+              combinedTargets['mouthStretchLeft'] || 0,
+              val * 0.26
+            );
+            combinedTargets['mouthStretchRight'] = Math.max(
+              combinedTargets['mouthStretchRight'] || 0,
+              val * 0.24
+            );
+            combinedTargets['mouthSmileLeft'] = Math.max(
+              combinedTargets['mouthSmileLeft'] || 0,
+              val * 0.15
+            );
+            combinedTargets['mouthSmileRight'] = Math.max(
+              combinedTargets['mouthSmileRight'] || 0,
+              val * 0.13
+            );
+            combinedTargets['mouthUpperUpLeft'] = Math.max(
+              combinedTargets['mouthUpperUpLeft'] || 0,
+              val * 0.08
+            );
+            combinedTargets['mouthUpperUpRight'] = Math.max(
+              combinedTargets['mouthUpperUpRight'] || 0,
+              val * 0.07
+            );
+            break;
+
+          case 'viseme_U': // High back rounded vowel ("queue", "choose", "value", "two")
+            combinedTargets['jawOpen'] = Math.max(combinedTargets['jawOpen'] || 0, val * 0.24);
+            combinedTargets['mouthOpen'] = Math.max(combinedTargets['mouthOpen'] || 0, val * 0.2);
+            combinedTargets['mouthPucker'] = Math.max(
+              combinedTargets['mouthPucker'] || 0,
+              val * 0.46
+            );
+            combinedTargets['mouthFunnel'] = Math.max(
+              combinedTargets['mouthFunnel'] || 0,
+              val * 0.34
+            );
+            combinedTargets['mouthRollUpper'] = Math.max(
+              combinedTargets['mouthRollUpper'] || 0,
+              val * 0.08
+            );
+            break;
+
+          case 'viseme_PP': // Bilabial plosives (P, B, M - "pivot", "problem", "memory", "space")
+            // Firm bilabial seal with lip compression before acoustic release
             combinedTargets['mouthClose'] = Math.max(
               combinedTargets['mouthClose'] || 0,
-              val * 0.85
+              val * 0.92
             );
-            combinedTargets['jawOpen'] = Math.max(combinedTargets['jawOpen'] || 0, val * 0.05);
+            combinedTargets['mouthPressLeft'] = Math.max(
+              combinedTargets['mouthPressLeft'] || 0,
+              val * 0.28
+            );
+            combinedTargets['mouthPressRight'] = Math.max(
+              combinedTargets['mouthPressRight'] || 0,
+              val * 0.26
+            );
+            combinedTargets['mouthRollUpper'] = Math.max(
+              combinedTargets['mouthRollUpper'] || 0,
+              val * 0.14
+            );
+            combinedTargets['mouthRollLower'] = Math.max(
+              combinedTargets['mouthRollLower'] || 0,
+              val * 0.14
+            );
+            combinedTargets['jawOpen'] = Math.max(combinedTargets['jawOpen'] || 0, val * 0.02);
             break;
-          case 'viseme_FF': // Labiodentals (F, V)
-            combinedTargets['jawOpen'] = Math.max(combinedTargets['jawOpen'] || 0, val * 0.18);
-            combinedTargets['mouthOpen'] = Math.max(combinedTargets['mouthOpen'] || 0, val * 0.15);
+
+          case 'viseme_FF': // Labiodentals (F, V - "first", "divide", "function", "half")
+            // Lower lip curls upward and tucks under upper incisors
+            combinedTargets['mouthShrugLower'] = Math.max(
+              combinedTargets['mouthShrugLower'] || 0,
+              val * 0.36
+            );
+            combinedTargets['mouthRollLower'] = Math.max(
+              combinedTargets['mouthRollLower'] || 0,
+              val * 0.22
+            );
+            combinedTargets['mouthClose'] = Math.max(combinedTargets['mouthClose'] || 0, val * 0.3);
+            combinedTargets['jawOpen'] = Math.max(combinedTargets['jawOpen'] || 0, val * 0.16);
+            combinedTargets['mouthOpen'] = Math.max(combinedTargets['mouthOpen'] || 0, val * 0.12);
+            combinedTargets['mouthUpperUpLeft'] = Math.max(
+              combinedTargets['mouthUpperUpLeft'] || 0,
+              val * 0.06
+            );
+            combinedTargets['mouthUpperUpRight'] = Math.max(
+              combinedTargets['mouthUpperUpRight'] || 0,
+              val * 0.05
+            );
             break;
-          case 'viseme_TH': // Dentals (TH)
+
+          case 'viseme_TH': // Dentals (TH - "the", "this", "algorithm", "path")
+            // Tongue tip visibly protrudes between teeth
+            combinedTargets['tongueOut'] = Math.max(combinedTargets['tongueOut'] || 0, val * 0.24);
             combinedTargets['jawOpen'] = Math.max(combinedTargets['jawOpen'] || 0, val * 0.22);
-            combinedTargets['mouthOpen'] = Math.max(combinedTargets['mouthOpen'] || 0, val * 0.2);
-            combinedTargets['tongueOut'] = Math.max(combinedTargets['tongueOut'] || 0, val * 0.18);
+            combinedTargets['mouthOpen'] = Math.max(combinedTargets['mouthOpen'] || 0, val * 0.18);
+            combinedTargets['mouthStretchLeft'] = Math.max(
+              combinedTargets['mouthStretchLeft'] || 0,
+              val * 0.12
+            );
+            combinedTargets['mouthStretchRight'] = Math.max(
+              combinedTargets['mouthStretchRight'] || 0,
+              val * 0.1
+            );
             break;
+
+          case 'viseme_SS': // Sibilants (S, Z - "search", "complexity", "size", "sorted")
+            // Teeth held close together with lips parted and stretched
+            combinedTargets['jawOpen'] = Math.max(combinedTargets['jawOpen'] || 0, val * 0.15);
+            combinedTargets['mouthOpen'] = Math.max(combinedTargets['mouthOpen'] || 0, val * 0.12);
+            combinedTargets['mouthStretchLeft'] = Math.max(
+              combinedTargets['mouthStretchLeft'] || 0,
+              val * 0.22
+            );
+            combinedTargets['mouthStretchRight'] = Math.max(
+              combinedTargets['mouthStretchRight'] || 0,
+              val * 0.2
+            );
+            combinedTargets['mouthUpperUpLeft'] = Math.max(
+              combinedTargets['mouthUpperUpLeft'] || 0,
+              val * 0.1
+            );
+            combinedTargets['mouthUpperUpRight'] = Math.max(
+              combinedTargets['mouthUpperUpRight'] || 0,
+              val * 0.08
+            );
+            break;
+
+          case 'viseme_CH': // Postalveolars (CH, SH, J - "check", "choose", "partition")
+            combinedTargets['jawOpen'] = Math.max(combinedTargets['jawOpen'] || 0, val * 0.22);
+            combinedTargets['mouthOpen'] = Math.max(combinedTargets['mouthOpen'] || 0, val * 0.18);
+            combinedTargets['mouthFunnel'] = Math.max(
+              combinedTargets['mouthFunnel'] || 0,
+              val * 0.24
+            );
+            combinedTargets['mouthUpperUpLeft'] = Math.max(
+              combinedTargets['mouthUpperUpLeft'] || 0,
+              val * 0.12
+            );
+            combinedTargets['mouthUpperUpRight'] = Math.max(
+              combinedTargets['mouthUpperUpRight'] || 0,
+              val * 0.1
+            );
+            break;
+
           case 'viseme_DD': // Alveolars (T, D)
           case 'viseme_kk': // Velars (K, G)
-          case 'viseme_CH': // Postalveolars (CH, SH, J)
           case 'viseme_nn': // Nasals & liquids (N, L)
           case 'viseme_RR': // Rhotics (R)
             combinedTargets['jawOpen'] = Math.max(combinedTargets['jawOpen'] || 0, val * 0.24);
-            combinedTargets['mouthOpen'] = Math.max(combinedTargets['mouthOpen'] || 0, val * 0.22);
+            combinedTargets['mouthOpen'] = Math.max(combinedTargets['mouthOpen'] || 0, val * 0.2);
+            combinedTargets['mouthStretchLeft'] = Math.max(
+              combinedTargets['mouthStretchLeft'] || 0,
+              val * 0.14
+            );
+            combinedTargets['mouthStretchRight'] = Math.max(
+              combinedTargets['mouthStretchRight'] || 0,
+              val * 0.12
+            );
+            if (key === 'viseme_nn' || key === 'viseme_DD') {
+              combinedTargets['tongueOut'] = Math.max(
+                combinedTargets['tongueOut'] || 0,
+                val * 0.08
+              );
+            }
             break;
-          case 'viseme_SS': // Sibilants (S, Z)
-            combinedTargets['jawOpen'] = Math.max(combinedTargets['jawOpen'] || 0, val * 0.16);
-            combinedTargets['mouthOpen'] = Math.max(combinedTargets['mouthOpen'] || 0, val * 0.14);
-            break;
+
           default:
             combinedTargets['jawOpen'] = Math.max(combinedTargets['jawOpen'] || 0, val * 0.25);
             combinedTargets['mouthOpen'] = Math.max(combinedTargets['mouthOpen'] || 0, val * 0.2);
@@ -299,10 +485,30 @@ export class AvatarModel {
       }
     });
 
-    // Subtle natural speaking presence: if speaking but between syllables, hold relaxed conversational parting
+    // Subtle conversational natural micro-asymmetry during speech (breaks robotic mirror perfection)
+    if (isSpeaking && maxSpeechActivity > 0.05) {
+      const lateralSway = Math.sin(currentTimeSec * 6.5) * 0.015 * maxSpeechActivity;
+      if (lateralSway > 0) {
+        combinedTargets['jawRight'] = (combinedTargets['jawRight'] || 0) + lateralSway;
+      } else {
+        combinedTargets['jawLeft'] = (combinedTargets['jawLeft'] || 0) - lateralSway;
+      }
+    }
+
+    // Conversational rest parting: when active in discourse, lips hold a gentle conversational part
     if (isSpeaking && maxSpeechActivity < 0.05) {
-      combinedTargets['jawOpen'] = Math.max(combinedTargets['jawOpen'] || 0, 0.09);
-      combinedTargets['mouthOpen'] = Math.max(combinedTargets['mouthOpen'] || 0, 0.07);
+      combinedTargets['jawOpen'] = Math.max(combinedTargets['jawOpen'] || 0, 0.07);
+      combinedTargets['mouthOpen'] = Math.max(combinedTargets['mouthOpen'] || 0, 0.05);
+    }
+
+    // Expressive teaching eyebrow accents: raised brows on open vowels & emphasized points
+    if (isSpeaking && (combinedTargets['jawOpen'] || 0) > 0.16) {
+      const browAccent = (combinedTargets['jawOpen'] || 0) * 0.24;
+      combinedTargets['browInnerUp'] = (combinedTargets['browInnerUp'] || 0) + browAccent;
+      combinedTargets['browOuterUpLeft'] =
+        (combinedTargets['browOuterUpLeft'] || 0) + browAccent * 0.65;
+      combinedTargets['browOuterUpRight'] =
+        (combinedTargets['browOuterUpRight'] || 0) + browAccent * 0.65;
     }
 
     // C. Blinking
@@ -356,9 +562,34 @@ export class AvatarModel {
       delete combinedTargets['mouthSmile'];
     }
 
-    // Apply combined weights to all meshes that have each target
+    // Viscoelastic muscle response smoothing across all blendshapes
+    const allTargetNames = new Set<string>([
+      ...Object.keys(combinedTargets),
+      ...Object.keys(this.smoothedTargets),
+    ]);
+
+    allTargetNames.forEach((name) => {
+      const target = combinedTargets[name] || 0;
+      const current = this.smoothedTargets[name] || 0;
+      // Fast attack for crisp plosive closures (PP, DD, kk), smooth fluid release for vowels
+      const isPlosive = name.includes('Close') || name.includes('Press');
+      const attackRate = isPlosive
+        ? Math.min(1.0, deltaTime * 34.0)
+        : Math.min(1.0, deltaTime * 26.0);
+      const decayRate = Math.min(1.0, deltaTime * 18.0);
+      const rate = target > current ? attackRate : decayRate;
+      const nextVal = current + (target - current) * rate;
+
+      if (Math.abs(nextVal) < 0.001 && target === 0) {
+        delete this.smoothedTargets[name];
+      } else {
+        this.smoothedTargets[name] = nextVal;
+      }
+    });
+
+    // Apply smoothed weights to all meshes that have each target
     for (const info of this.morphMeshes) {
-      Object.entries(combinedTargets).forEach(([targetName, weight]) => {
+      Object.entries(this.smoothedTargets).forEach(([targetName, weight]) => {
         const idx = info.dict[targetName];
         if (idx !== undefined) {
           info.influences[idx] = Math.min(1.0, Math.max(0.0, weight));
@@ -366,7 +597,7 @@ export class AvatarModel {
       });
     }
 
-    // 2. Procedural Breathing & Micro-Gestures
+    // 2. Procedural Breathing & Pedagogical Conversational Gestures
     const breathCycle = Math.sin(currentTimeSec * 2.2);
 
     const spine = this.bones.get('Spine2') || this.bones.get('Spine1');
@@ -383,12 +614,17 @@ export class AvatarModel {
 
     const head = this.bones.get('Head');
     if (head) {
-      // Forward-facing head with subtle organic micro-drift and sentiment tilt
+      // Forward-facing head with organic micro-drift, sentiment tilt, and conversational speech nod
       const microSwayX = Math.sin(currentTimeSec * 0.8) * 0.002;
       const microSwayY = Math.cos(currentTimeSec * 0.5) * 0.003;
 
-      head.rotation.x = this.baseHeadRot.x + microSwayX;
-      head.rotation.y = this.baseHeadRot.y + microSwayY;
+      // Natural speech cadence nod: head rhythmically dips slightly on syllable stress
+      const speechNod = isSpeaking ? (combinedTargets['jawOpen'] || 0) * -0.05 : 0;
+      // Conversational head yaw shift: educator shifting focus while explaining
+      const speechYaw = isSpeaking ? Math.sin(currentTimeSec * 2.6) * 0.008 * maxSpeechActivity : 0;
+
+      head.rotation.x = this.baseHeadRot.x + microSwayX + speechNod;
+      head.rotation.y = this.baseHeadRot.y + microSwayY + speechYaw;
       head.rotation.z = this.baseHeadRot.z + headTiltZ * 0.35;
     }
   }
