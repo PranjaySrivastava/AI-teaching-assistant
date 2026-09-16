@@ -38,7 +38,7 @@ MAX_HISTORY_TURNS: int = int(os.environ.get("MAX_HISTORY_TURNS", "6"))
 # ── Valid schema values (documented here, not in the prompt) ──────────────────
 
 VALID_MOODS = {"explaining", "thinking", "encouraging", "celebrating"}
-VALID_LANGUAGES = {"python", "java", "cpp"}
+VALID_LANGUAGES = {"python", "javascript", "java", "cpp"}
 VALID_VISUAL_TYPES = {"sorting", "tree", "graph", "array", "dp"}
 VALID_ACTIONS = {"compare", "swap", "highlight", "traverse", "insert", "delete", "visit", "relax"}
 MAX_EXPLANATION_WORDS = int(os.environ.get("MAX_EXPLANATION_WORDS", "150"))

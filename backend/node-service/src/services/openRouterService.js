@@ -308,6 +308,18 @@ Every response MUST be strictly valid JSON matching this exact schema:
       'traversal',
       'algorithm',
       'data structure',
+      'sliding window',
+      'window',
+      'knapsack',
+      'trie',
+      'pointer',
+      'two pointer',
+      'fibonacci',
+      'merge',
+      'avl',
+      'rotation',
+      'quicksort',
+      'pivot',
     ];
     const isDsa = dsaKeywords.some((kw) => q.includes(kw));
 
@@ -329,7 +341,55 @@ Every response MUST be strictly valid JSON matching this exact schema:
       };
     }
 
-    // Follow-up: "What if the array is already sorted?" (PDF Page 1 example)
+    // Celebrating student correct answer
+    if (
+      q.includes('did i get that right') ||
+      q.includes('is that right') ||
+      (q.includes('correct') && q.includes('so '))
+    ) {
+      return {
+        explanation:
+          'Spot on! That is a stellar summary. QuickSort partitions around a pivot with O(n log n) average time complexity. You have grasped the core divide-and-conquer concept brilliantly!',
+        mood: 'celebrating',
+        code: {
+          language: 'python',
+          snippet: `def quicksort(arr):\n    if len(arr) <= 1: return arr\n    pivot = arr[len(arr) // 2]\n    return quicksort([x for x in arr if x < pivot]) + [x for x in arr if x == pivot] + quicksort([x for x in arr if x > pivot])`,
+        },
+        visualSequence: {
+          type: 'sorting',
+          title: 'QuickSort Partition Verification',
+          steps: [
+            {
+              step: 1,
+              action: 'highlight',
+              description: 'Pivot chosen at middle index',
+              elements: [3],
+            },
+            {
+              step: 2,
+              action: 'compare',
+              description: 'Left sub-array elements < pivot confirmed',
+              elements: [0, 1],
+            },
+            {
+              step: 3,
+              action: 'highlight',
+              description: 'Sorted order verified in O(n log n)',
+              elements: [3],
+            },
+          ],
+        },
+        suggestedFollowUps: [
+          'What is the worst-case space complexity?',
+          'How does 3-way partitioning handle duplicates?',
+        ],
+        modelUsed: model,
+        fallbackMode: true,
+        ...(warning ? { warning } : {}),
+      };
+    }
+
+    // Follow-up: "What if the array is already sorted?"
     if (q.includes('already sorted') || (q.includes('sorted') && q.includes('what if'))) {
       return {
         explanation:
@@ -337,40 +397,416 @@ Every response MUST be strictly valid JSON matching this exact schema:
         mood: 'thinking',
         code: {
           language: 'python',
-          snippet: `def randomized_partition(arr, low, high):
-    import random
-    pivot_idx = random.randint(low, high)
-    arr[pivot_idx], arr[high] = arr[high], arr[pivot_idx] # Mitigates O(n^2)
-    return partition(arr, low, high)`,
+          snippet: `def randomized_partition(arr, low, high):\n    import random\n    pivot_idx = random.randint(low, high)\n    arr[pivot_idx], arr[high] = arr[high], arr[pivot_idx]\n    return partition(arr, low, high)`,
         },
         visualSequence: {
           type: 'complexity_analysis',
-          title: 'Worst-Case Degeneration on Sorted Input',
+          title: 'QuickSort Worst-Case: Sorted Input',
           steps: [
             {
               step: 1,
               action: 'highlight',
-              description: 'Subarrays partition into sizes 0 and n-1 each recursion level',
-              elements: [0, 6],
+              description: 'Smallest element selected as pivot',
+              elements: [0],
             },
             {
               step: 2,
               action: 'compare',
-              description: 'Requires n recursive levels, resulting in O(n^2) total comparisons',
-              elements: [1, 5],
+              description: 'All elements larger: unbalanced partition of size n-1',
+              elements: [0, 6],
             },
             {
               step: 3,
               action: 'highlight',
-              description:
-                'Randomized pivot selection or Median-of-Three restores average O(n log n)',
-              elements: [3],
+              description: 'N levels deep gives O(n²) total comparisons',
+              elements: [6],
             },
           ],
         },
         suggestedFollowUps: [
           'How does randomized pivot selection fix this?',
           'How does MergeSort compare on already sorted arrays?',
+        ],
+        modelUsed: model,
+        fallbackMode: true,
+        ...(warning ? { warning } : {}),
+      };
+    }
+
+    // Dijkstra
+    if (q.includes('dijkstra')) {
+      return {
+        explanation:
+          "Dijkstra's algorithm finds the shortest path on a non-negative weighted graph. Using a min-heap priority queue, it greedily finalizes the closest unvisited vertex step by step in O((V + E) log V) time.",
+        mood: 'explaining',
+        code: {
+          language: 'python',
+          snippet: `import heapq\n\ndef dijkstra(graph, start):\n    dist = {node: float('inf') for node in graph}\n    dist[start] = 0\n    pq = [(0, start)]\n    while pq:\n        d, u = heapq.heappop(pq)\n        if d > dist[u]: continue\n        for v, weight in graph[u].items():\n            if dist[u] + weight < dist[v]:\n                dist[v] = dist[u] + weight\n                heapq.heappush(pq, (dist[v], v))\n    return dist`,
+        },
+        visualSequence: {
+          type: 'graph',
+          title: "Dijkstra's Shortest Path",
+          steps: [
+            {
+              step: 1,
+              action: 'visit',
+              description: 'Initialize start node with distance 0',
+              elements: ['A'],
+            },
+            {
+              step: 2,
+              action: 'relax',
+              description: 'Relax adjacent edges and update priority queue',
+              elements: ['A', 'B', 'C'],
+            },
+            {
+              step: 3,
+              action: 'visit',
+              description: 'Extract min distance vertex and finalize shortest path',
+              elements: ['F'],
+            },
+          ],
+        },
+        suggestedFollowUps: [
+          'Why does Dijkstra fail with negative weights?',
+          'How does the Bellman-Ford algorithm differ?',
+        ],
+        modelUsed: model,
+        fallbackMode: true,
+        ...(warning ? { warning } : {}),
+      };
+    }
+
+    // BFS vs DFS
+    if (q.includes('bfs') || q.includes('dfs')) {
+      return {
+        explanation:
+          'BFS explores level-by-level using a FIFO queue, finding the shortest path on unweighted graphs. DFS plunges deep down one path using a LIFO stack before backtracking. Both run in O(V + E) time.',
+        mood: 'explaining',
+        code: {
+          language: 'python',
+          snippet: `from collections import deque\n\ndef bfs(graph, start):\n    visited, q = {start}, deque([start])\n    while q:\n        node = q.popleft()\n        for neighbor in graph[node]:\n            if neighbor not in visited:\n                visited.add(neighbor)\n                q.append(neighbor)\n    return visited`,
+        },
+        visualSequence: {
+          type: 'graph',
+          title: 'BFS vs DFS Traversal',
+          steps: [
+            { step: 1, action: 'visit', description: 'Enqueue start node A', elements: ['A'] },
+            {
+              step: 2,
+              action: 'traverse',
+              description: 'Visit all immediate neighbors at depth 1',
+              elements: ['B', 'C'],
+            },
+            {
+              step: 3,
+              action: 'visit',
+              description: 'Process level 2 neighbors until queue is empty',
+              elements: ['D', 'E', 'F'],
+            },
+          ],
+        },
+        suggestedFollowUps: [
+          'When is DFS preferred over BFS?',
+          'How does A* search improve upon BFS?',
+        ],
+        modelUsed: model,
+        fallbackMode: true,
+        ...(warning ? { warning } : {}),
+      };
+    }
+
+    // AVL Tree
+    if (q.includes('avl') || q.includes('rotation')) {
+      return {
+        explanation:
+          'An AVL Tree is a self-balancing binary search tree where the balance factor of any node is strictly between -1 and +1. When an insertion causes unbalance, single or double rotations restore O(log n) height.',
+        mood: 'explaining',
+        code: {
+          language: 'python',
+          snippet: `def right_rotate(y):\n    x = y.left\n    T2 = x.right\n    x.right = y\n    y.left = T2\n    y.height = 1 + max(get_height(y.left), get_height(y.right))\n    x.height = 1 + max(get_height(x.left), get_height(x.right))\n    return x`,
+        },
+        visualSequence: {
+          type: 'tree',
+          title: 'AVL Tree Rotations',
+          steps: [
+            {
+              step: 1,
+              action: 'insert',
+              description: 'Insert new node in BST order',
+              elements: [5],
+            },
+            {
+              step: 2,
+              action: 'highlight',
+              description: 'Detect balance factor > 1 at ancestor',
+              elements: [2],
+            },
+            {
+              step: 3,
+              action: 'swap',
+              description: 'Execute rotation to restore height balance',
+              elements: [1, 2],
+            },
+          ],
+        },
+        suggestedFollowUps: [
+          'What are the four rotation cases?',
+          'How does a Red-Black Tree differ from an AVL Tree?',
+        ],
+        modelUsed: model,
+        fallbackMode: true,
+        ...(warning ? { warning } : {}),
+      };
+    }
+
+    // Trie Data Structure
+    if (q.includes('trie')) {
+      return {
+        explanation:
+          'A Trie, or prefix tree, stores strings character-by-character along tree paths. It enables O(L) search, insert, and prefix lookup proportional to word length L, powering fast autocomplete and spellcheck.',
+        mood: 'explaining',
+        code: {
+          language: 'python',
+          snippet: `class TrieNode:\n    def __init__(self):\n        self.children = {}\n        self.is_end = False\n\nclass Trie:\n    def __init__(self):\n        self.root = TrieNode()\n    def insert(self, word):\n        node = self.root\n        for ch in word:\n            if ch not in node.children: node.children[ch] = TrieNode()\n            node = node.children[ch]\n        node.is_end = True`,
+        },
+        visualSequence: {
+          type: 'tree',
+          title: 'Trie Prefix Search',
+          steps: [
+            { step: 1, action: 'highlight', description: 'Start at root node', elements: [0] },
+            {
+              step: 2,
+              action: 'traverse',
+              description: 'Traverse character path for prefix',
+              elements: [1, 2],
+            },
+            {
+              step: 3,
+              action: 'highlight',
+              description: 'Prefix matched successfully in O(L)',
+              elements: [2],
+            },
+          ],
+        },
+        suggestedFollowUps: [
+          'How does a Radix tree compress Trie memory?',
+          'How is a Trie used in IP routing lookup?',
+        ],
+        modelUsed: model,
+        fallbackMode: true,
+        ...(warning ? { warning } : {}),
+      };
+    }
+
+    // Binary Search Tree / General Tree
+    if (q.includes('bst') || q.includes('tree')) {
+      return {
+        explanation:
+          'A Binary Search Tree maintains the invariant that all left subtree keys are smaller, and all right subtree keys are larger. Searching, inserting, and deleting run in O(h) time proportional to tree height.',
+        mood: 'explaining',
+        code: {
+          language: 'python',
+          snippet: `def search_bst(root, val):\n    if not root or root.val == val: return root\n    if val < root.val: return search_bst(root.left, val)\n    return search_bst(root.right, val)`,
+        },
+        visualSequence: {
+          type: 'tree',
+          title: 'Binary Search Tree Operations',
+          steps: [
+            { step: 1, action: 'highlight', description: 'Examine root node 50', elements: [50] },
+            {
+              step: 2,
+              action: 'traverse',
+              description: 'Target < 50: branch left to node 30',
+              elements: [30],
+            },
+            {
+              step: 3,
+              action: 'highlight',
+              description: 'Target confirmed at node in O(log n)',
+              elements: [40],
+            },
+          ],
+        },
+        suggestedFollowUps: [
+          'What is the time complexity if the tree becomes degenerate?',
+          'How does in-order traversal yield sorted keys?',
+        ],
+        modelUsed: model,
+        fallbackMode: true,
+        ...(warning ? { warning } : {}),
+      };
+    }
+
+    // Dynamic Programming - Fibonacci
+    if (q.includes('fibonacci')) {
+      return {
+        explanation:
+          'Dynamic programming eliminates redundant recalculation by storing subproblem answers. In Fibonacci, computing fib(n) bottom-up takes O(n) time and O(1) memory, turning exponential O(2^n) recursion into linear.',
+        mood: 'explaining',
+        code: {
+          language: 'python',
+          snippet: `def fib_dp(n):\n    if n <= 1: return n\n    a, b = 0, 1\n    for _ in range(2, n + 1):\n        a, b = b, a + b\n    return b`,
+        },
+        visualSequence: {
+          type: 'dp',
+          title: 'Fibonacci DP Tabulation',
+          steps: [
+            {
+              step: 1,
+              action: 'highlight',
+              description: 'Base cases: fib(0)=0, fib(1)=1',
+              elements: [0, 1],
+            },
+            {
+              step: 2,
+              action: 'compare',
+              description: 'Sum preceding two terms to produce fib(2)=1',
+              elements: [1, 2],
+            },
+            {
+              step: 3,
+              action: 'highlight',
+              description: 'Result computed in O(n) time with O(1) space',
+              elements: [2],
+            },
+          ],
+        },
+        suggestedFollowUps: [
+          'What is top-down memoization vs bottom-up tabulation?',
+          'How can matrix exponentiation solve Fibonacci in O(log n)?',
+        ],
+        modelUsed: model,
+        fallbackMode: true,
+        ...(warning ? { warning } : {}),
+      };
+    }
+
+    // 0/1 Knapsack Problem
+    if (q.includes('knapsack')) {
+      return {
+        explanation:
+          'The 0/1 Knapsack problem asks for the maximum item value that fits into a weight capacity W. For each item, we either include it or exclude it, building an optimal subproblem DP table in O(n * W) pseudo-polynomial time.',
+        mood: 'thinking',
+        code: {
+          language: 'python',
+          snippet: `def knapsack(W, wt, val, n):\n    dp = [[0] * (W + 1) for _ in range(n + 1)]\n    for i in range(1, n + 1):\n        for w in range(1, W + 1):\n            if wt[i-1] <= w:\n                dp[i][w] = max(val[i-1] + dp[i-1][w-wt[i-1]], dp[i-1][w])\n            else: dp[i][w] = dp[i-1][w]\n    return dp[n][W]`,
+        },
+        visualSequence: {
+          type: 'dp',
+          title: '0/1 Knapsack DP Table',
+          steps: [
+            {
+              step: 1,
+              action: 'highlight',
+              description: 'Initialize DP table row 0 with zero values',
+              elements: [0],
+            },
+            {
+              step: 2,
+              action: 'compare',
+              description: 'Evaluate max(include item, exclude item)',
+              elements: [1, 2],
+            },
+            {
+              step: 3,
+              action: 'highlight',
+              description: 'Optimal value achieved at dp[n][W]',
+              elements: [3],
+            },
+          ],
+        },
+        suggestedFollowUps: [
+          'How can we optimize space from O(n * W) to O(W)?',
+          'Why is Knapsack NP-complete if fractional items are allowed?',
+        ],
+        modelUsed: model,
+        fallbackMode: true,
+        ...(warning ? { warning } : {}),
+      };
+    }
+
+    // Two Pointers & Sliding Window
+    if (q.includes('sliding window') || q.includes('two pointer') || q.includes('pointer')) {
+      return {
+        explanation:
+          'The two pointers and sliding window techniques optimize nested O(n²) loops into linear O(n) by maintaining a valid window or bounding pointers that adjust monotonically based on constraints.',
+        mood: 'explaining',
+        code: {
+          language: 'python',
+          snippet: `def max_sub_array_len(nums, k):\n    left = total = max_len = 0\n    for right in range(len(nums)):\n        total += nums[right]\n        while total > k and left <= right:\n            total -= nums[left]\n            left += 1\n        max_len = max(max_len, right - left + 1)\n    return max_len`,
+        },
+        visualSequence: {
+          type: 'array',
+          title: 'Sliding Window Expansion & Contraction',
+          steps: [
+            {
+              step: 1,
+              action: 'highlight',
+              description: 'Expand right pointer to include element',
+              elements: [0],
+            },
+            {
+              step: 2,
+              action: 'compare',
+              description: 'Evaluate window sum against constraint k',
+              elements: [0, 1],
+            },
+            {
+              step: 3,
+              action: 'traverse',
+              description: 'Contract left pointer when constraint is violated in O(n)',
+              elements: [1],
+            },
+          ],
+        },
+        suggestedFollowUps: [
+          'How does the fast & slow pointer cycle detection work?',
+          'When does sliding window require auxiliary hash tables?',
+        ],
+        modelUsed: model,
+        fallbackMode: true,
+        ...(warning ? { warning } : {}),
+      };
+    }
+
+    // MergeSort
+    if (q.includes('merge') || (q.includes('sort') && !q.includes('quick'))) {
+      return {
+        explanation:
+          'MergeSort is a divide-and-conquer algorithm that recursively splits an array in halves down to single items, then merges sorted arrays back together in guaranteed O(n log n) time and O(n) space.',
+        mood: 'explaining',
+        code: {
+          language: 'python',
+          snippet: `def merge_sort(arr):\n    if len(arr) <= 1: return arr\n    mid = len(arr) // 2\n    left = merge_sort(arr[:mid])\n    right = merge_sort(arr[mid:])\n    return merge(left, right)`,
+        },
+        visualSequence: {
+          type: 'sorting',
+          title: 'MergeSort Divide & Conquer',
+          steps: [
+            {
+              step: 1,
+              action: 'highlight',
+              description: 'Divide array into two equal halves',
+              elements: [0, 3],
+            },
+            {
+              step: 2,
+              action: 'compare',
+              description: 'Recursively sort each independent half',
+              elements: [0, 1],
+            },
+            {
+              step: 3,
+              action: 'swap',
+              description: 'Merge sorted sub-arrays in O(n) linear scan',
+              elements: [0, 6],
+            },
+          ],
+        },
+        suggestedFollowUps: [
+          'Why is MergeSort preferred over QuickSort for linked lists?',
+          'How does TimSort leverage MergeSort?',
         ],
         modelUsed: model,
         fallbackMode: true,
@@ -450,7 +886,7 @@ Every response MUST be strictly valid JSON matching this exact schema:
         snippet: `# Algorithm Demonstration\ndef solve_problem(data):\n    # Process data systematically\n    return [item for item in data if item is not None]`,
       },
       visualSequence: {
-        type: 'algorithm_visualization',
+        type: 'array',
         title: 'Step-by-Step Visualization',
         steps: [
           {
