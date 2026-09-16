@@ -59,4 +59,37 @@ describe('LipSyncController', () => {
     const weights = ctrl.update(0.05, 1.0);
     expect(weights.get('viseme_aa')).toBeGreaterThan(0);
   });
+
+  it('generates distinct phonemes for diverse vocabulary instead of repetitive AH flaps', () => {
+    const {
+      generatePhonemesFromText,
+      PHONEME_TO_VISEME,
+    } = require('../src/components/Avatar/lipSyncController');
+    const result = generatePhonemesFromText('QuickSort chooses a pivot');
+    expect(result.length).toBeGreaterThan(10);
+
+    const visemes = result.map((p: any) => PHONEME_TO_VISEME[p.phoneme] || p.phoneme);
+
+    // Must contain diverse visemes: velar (kk), labial (PP), sibilant (SS), dental (DD)
+    expect(visemes).toContain('viseme_kk'); // from Q, k
+    expect(visemes).toContain('viseme_PP'); // from p in pivot
+    expect(visemes).toContain('viseme_SS'); // from S in QuickSort, chooses
+    expect(visemes).toContain('viseme_DD'); // from t in QuickSort, pivot
+
+    // Check that not more than 35% of visemes are viseme_aa
+    const aaCount = visemes.filter((v: string) => v === 'viseme_aa').length;
+    expect(aaCount / visemes.length).toBeLessThan(0.35);
+  });
+
+  it('correctly maps digraphs and diphthongs', () => {
+    const {
+      generatePhonemesFromText,
+      PHONEME_TO_VISEME,
+    } = require('../src/components/Avatar/lipSyncController');
+    const result = generatePhonemesFromText('The algorithm thinking phase');
+    const visemes = result.map((p: any) => PHONEME_TO_VISEME[p.phoneme]);
+
+    expect(visemes).toContain('viseme_TH'); // from 'The' and 'thinking'
+    expect(visemes).toContain('viseme_FF'); // from 'ph' in phase
+  });
 });

@@ -257,8 +257,24 @@ export default function Home() {
         speakStatement(answer);
       }
     } catch (err) {
-      console.warn('Backend query error, using local fallback:', err);
-      const fallbackAnswer = `Let us analyze ${q}. In computer science, we examine the problem constraints and asymptotic complexity to formulate the optimal approach.`;
+      console.warn('Backend query error, using intelligent local fallback:', err);
+      let fallbackAnswer = `Let us analyze ${q}. In computer science, we examine the problem constraints and asymptotic complexity to formulate the optimal approach.`;
+      const qLower = q.toLowerCase();
+
+      if (qLower.includes('pivot') || qLower.includes('quick')) {
+        fallbackAnswer =
+          'QuickSort works by partitioning an array around a chosen pivot element. Elements smaller than the pivot move left, and larger elements move right, then we recursively sort both partitions.';
+      } else if (qLower.includes('binary search')) {
+        fallbackAnswer =
+          'Binary search operates on sorted collections by comparing the target with the middle element. It halves the search space each step, achieving O(log n) logarithmic time complexity.';
+      } else if (qLower.includes('big-o') || qLower.includes('complexity')) {
+        fallbackAnswer =
+          'Big-O notation quantifies the worst-case asymptotic upper bound of time or memory as input size n grows, helping us compare algorithm efficiency objectively.';
+      } else if (qLower.includes('merge')) {
+        fallbackAnswer =
+          'MergeSort is a divide-and-conquer algorithm that splits the array in halves recursively until single elements remain, then merges sorted arrays back together in O(n log n) time.';
+      }
+
       setSpokenText(fallbackAnswer);
       setSentiment('explaining');
       const phonemes = generatePhonemesFromText(fallbackAnswer, 1.05);
@@ -312,26 +328,31 @@ export default function Home() {
           };
 
           recognition.onerror = (err: any) => {
-            console.warn('Speech recognition error, using sample question fallback:', err);
+            console.warn('Speech recognition error:', err);
             setIsRecording(false);
-            askQuestion('How does QuickSort choose a pivot?');
+            if (err.error === 'no-speech') {
+              setQuestion(
+                'No speech detected. Please speak into your mic or choose a question below.'
+              );
+            } else if (err.error === 'not-allowed') {
+              setQuestion('Microphone access denied. You can select or type a question below.');
+            } else {
+              setQuestion('Could not capture audio. Please select a question below.');
+            }
           };
 
           recognitionRef.current = recognition;
           recognition.start();
           return;
         } catch (err) {
-          console.warn('Could not start live voice recognition, using fallback:', err);
+          console.warn('Could not start live voice recognition:', err);
         }
       }
     }
 
-    // Ultimate fallback if microphone access is completely unavailable
-    setIsRecording(true);
-    setTimeout(() => {
-      setIsRecording(false);
-      askQuestion('How does QuickSort choose a pivot?');
-    }, 1200);
+    // Graceful fallback if microphone access is completely unavailable
+    setIsRecording(false);
+    setQuestion('Microphone unavailable. Please select or type your question below.');
   };
 
   const toggleRecording = () => {

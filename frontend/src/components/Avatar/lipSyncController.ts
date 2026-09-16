@@ -70,6 +70,7 @@ export const PHONEME_TO_VISEME: Record<string, string> = {
   Q: 'viseme_kk',
   U: 'viseme_U',
   X: 'viseme_SS',
+  KS: 'viseme_SS',
 };
 
 // Realistic DS&A sentence phoneme stream with natural coarticulation overlaps
@@ -118,6 +119,74 @@ export const DEMO_PHONEME_SEQUENCE: TimedPhoneme[] = [
 ];
 
 /**
+ * Maps single characters to their acoustic phoneme and duration.
+ * Ensures every consonant produces distinct articulatory visemes rather than
+ * defaulting to open-jaw AH.
+ */
+function mapSingleChar(ch: string, speechRate: number): { phoneme: string; duration: number } {
+  let phoneme = 'AH';
+  let duration = 0.08 / speechRate;
+
+  if (ch === 'a') {
+    phoneme = 'AA';
+    duration = 0.12 / speechRate;
+  } else if (ch === 'e') {
+    phoneme = 'EH';
+    duration = 0.1 / speechRate;
+  } else if (ch === 'i') {
+    phoneme = 'IH';
+    duration = 0.095 / speechRate;
+  } else if (ch === 'o') {
+    phoneme = 'OH';
+    duration = 0.115 / speechRate;
+  } else if (ch === 'u') {
+    phoneme = 'UH';
+    duration = 0.11 / speechRate;
+  } else if ('pbm'.includes(ch)) {
+    phoneme = 'PP';
+    duration = 0.09 / speechRate;
+  } else if ('fv'.includes(ch)) {
+    phoneme = 'FF';
+    duration = 0.085 / speechRate;
+  } else if ('td'.includes(ch)) {
+    phoneme = 'T';
+    duration = 0.08 / speechRate;
+  } else if ('sz'.includes(ch)) {
+    phoneme = 'S';
+    duration = 0.09 / speechRate;
+  } else if ('kcgq'.includes(ch)) {
+    phoneme = 'K';
+    duration = 0.085 / speechRate;
+  } else if (ch === 'l') {
+    phoneme = 'L';
+    duration = 0.085 / speechRate;
+  } else if (ch === 'r') {
+    phoneme = 'R';
+    duration = 0.085 / speechRate;
+  } else if (ch === 'n') {
+    phoneme = 'N';
+    duration = 0.085 / speechRate;
+  } else if (ch === 'w') {
+    phoneme = 'W';
+    duration = 0.09 / speechRate;
+  } else if (ch === 'y') {
+    phoneme = 'Y';
+    duration = 0.09 / speechRate;
+  } else if (ch === 'j') {
+    phoneme = 'JH';
+    duration = 0.09 / speechRate;
+  } else if (ch === 'x') {
+    phoneme = 'KS';
+    duration = 0.1 / speechRate;
+  } else if (ch === 'h') {
+    phoneme = 'HH';
+    duration = 0.07 / speechRate;
+  }
+
+  return { phoneme, duration };
+}
+
+/**
  * Converts speech text into a stream of timed viseme/phoneme markers.
  * Calibrated precisely for natural conversational speech tempo (~135 wpm)
  * with 20ms coarticulation overlap between adjacent sounds.
@@ -140,92 +209,96 @@ export function generatePhonemesFromText(text: string, speechRate = 1.0): TimedP
     let i = 0;
     while (i < cleanWord.length) {
       let phoneme = 'AH';
-      let duration = 0.09 / speechRate;
+      let duration = 0.085 / speechRate;
+      let step = 1;
 
-      if (i + 1 < cleanWord.length) {
+      // 1. Check 4-letter suffix endings (e.g. "tion", "sion")
+      if (
+        i + 3 < cleanWord.length &&
+        (cleanWord.slice(i, i + 4) === 'tion' || cleanWord.slice(i, i + 4) === 'sion')
+      ) {
+        phoneme = 'CH';
+        duration = 0.12 / speechRate;
+        step = 4;
+      }
+      // 2. Check 2-letter digraphs & diphthongs
+      else if (i + 1 < cleanWord.length) {
         const pair = cleanWord.substring(i, i + 2);
         if (pair === 'th') {
           phoneme = 'TH';
           duration = 0.095 / speechRate;
-          i += 2;
+          step = 2;
         } else if (pair === 'sh' || pair === 'ch') {
           phoneme = 'CH';
           duration = 0.1 / speechRate;
-          i += 2;
+          step = 2;
+        } else if (pair === 'ph') {
+          phoneme = 'FF';
+          duration = 0.09 / speechRate;
+          step = 2;
+        } else if (pair === 'qu') {
+          phoneme = 'K';
+          duration = 0.095 / speechRate;
+          step = 2;
+        } else if (pair === 'ck') {
+          phoneme = 'K';
+          duration = 0.085 / speechRate;
+          step = 2;
+        } else if (pair === 'ng') {
+          phoneme = 'NG';
+          duration = 0.09 / speechRate;
+          step = 2;
+        } else if (pair === 'wh') {
+          phoneme = 'W';
+          duration = 0.09 / speechRate;
+          step = 2;
         } else if (pair === 'ee' || pair === 'ea') {
           phoneme = 'EE';
           duration = 0.13 / speechRate;
-          i += 2;
+          step = 2;
         } else if (pair === 'oo' || pair === 'ou') {
           phoneme = 'UW';
           duration = 0.12 / speechRate;
-          i += 2;
-        } else {
-          const ch = cleanWord[i];
-          if (ch === 'a') {
-            phoneme = 'AA';
-            duration = 0.12 / speechRate;
-          } else if (ch === 'e') {
-            phoneme = 'EH';
-            duration = 0.1 / speechRate;
-          } else if (ch === 'i') {
-            phoneme = 'IH';
-            duration = 0.095 / speechRate;
-          } else if (ch === 'o') {
-            phoneme = 'OH';
-            duration = 0.115 / speechRate;
-          } else if (ch === 'u') {
-            phoneme = 'UH';
-            duration = 0.11 / speechRate;
-          } else if (ch === 'p' || ch === 'b' || ch === 'm') {
-            phoneme = 'PP';
-            duration = 0.09 / speechRate;
-          } else if (ch === 'f' || ch === 'v') {
-            phoneme = 'FF';
-            duration = 0.085 / speechRate;
-          } else if (ch === 't' || ch === 'd') {
-            phoneme = 'T';
-            duration = 0.08 / speechRate;
-          } else if (ch === 's' || ch === 'z') {
-            phoneme = 'S';
-            duration = 0.09 / speechRate;
-          } else if (ch === 'k' || ch === 'c' || ch === 'g') {
-            phoneme = 'K';
-            duration = 0.085 / speechRate;
-          } else {
-            phoneme = 'AH';
-            duration = 0.08 / speechRate;
-          }
-          i += 1;
-        }
-      } else {
-        const ch = cleanWord[i];
-        if (ch === 'a') {
+          step = 2;
+        } else if (pair === 'ai' || pair === 'ay') {
+          phoneme = 'AY';
+          duration = 0.12 / speechRate;
+          step = 2;
+        } else if (pair === 'oi' || pair === 'oy') {
+          phoneme = 'OY';
+          duration = 0.12 / speechRate;
+          step = 2;
+        } else if (pair === 'oa' || pair === 'ow') {
+          phoneme = 'OW';
+          duration = 0.12 / speechRate;
+          step = 2;
+        } else if (pair === 'er' || pair === 'ir' || pair === 'ur') {
+          phoneme = 'ER';
+          duration = 0.11 / speechRate;
+          step = 2;
+        } else if (pair === 'ar') {
           phoneme = 'AA';
           duration = 0.12 / speechRate;
-        } else if (ch === 'e') {
-          phoneme = 'EH';
-          duration = 0.1 / speechRate;
-        } else if (ch === 'i') {
-          phoneme = 'IH';
-          duration = 0.095 / speechRate;
-        } else if (ch === 'o') {
-          phoneme = 'OH';
-          duration = 0.115 / speechRate;
-        } else if (ch === 'u') {
-          phoneme = 'UH';
-          duration = 0.11 / speechRate;
-        } else if (ch === 'p' || ch === 'b' || ch === 'm') {
-          phoneme = 'PP';
-          duration = 0.09 / speechRate;
-        } else if (ch === 'f' || ch === 'v') {
-          phoneme = 'FF';
-          duration = 0.085 / speechRate;
+          step = 2;
+        } else if (pair === 'or') {
+          phoneme = 'AO';
+          duration = 0.12 / speechRate;
+          step = 2;
         } else {
-          phoneme = 'AH';
-          duration = 0.08 / speechRate;
+          // Fall through to single-letter mapping
+          const ch = cleanWord[i];
+          const mapped = mapSingleChar(ch, speechRate);
+          phoneme = mapped.phoneme;
+          duration = mapped.duration;
+          step = 1;
         }
-        i += 1;
+      } else {
+        // Single letter at end of word
+        const ch = cleanWord[i];
+        const mapped = mapSingleChar(ch, speechRate);
+        phoneme = mapped.phoneme;
+        duration = mapped.duration;
+        step = 1;
       }
 
       result.push({
@@ -233,8 +306,10 @@ export function generatePhonemesFromText(text: string, speechRate = 1.0): TimedP
         start: currentTime,
         end: currentTime + duration,
       });
-      // 20ms coarticulation overlap between adjacent phonemes
-      currentTime += duration - 0.02 / speechRate;
+
+      // 20ms natural coarticulation blend
+      currentTime += Math.max(0.02, duration - 0.02 / speechRate);
+      i += step;
     }
 
     currentTime += isPunctuation ? 0.22 / speechRate : 0.08 / speechRate;
