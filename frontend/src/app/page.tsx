@@ -99,7 +99,7 @@ export default function Home() {
         // Real-time word-level sync — fires at the exact moment each word is spoken
         utterance.onboundary = (ev) => {
           if (ev.name === 'word') {
-            const word = answer.substring(ev.charIndex, ev.charIndex + (ev.charLength ?? 8));
+            const word = answer.substring(ev.charIndex, ev.charIndex + (ev.charLength || 8));
             onWordBoundaryRef.current?.(word.trim());
           }
         };
@@ -146,7 +146,7 @@ export default function Home() {
           if (ev.name === 'word') {
             const word = fallbackAnswer.substring(
               ev.charIndex,
-              ev.charIndex + (ev.charLength ?? 8)
+              ev.charIndex + (ev.charLength || 8)
             );
             onWordBoundaryRef.current?.(word.trim());
           }

@@ -81,7 +81,9 @@ export const AvatarCanvas: React.FC<AvatarCanvasProps> = ({
   }, [audioReactiveLevel]);
 
   // Toggle glasses on model
+  const showGlassesRef = useRef(showGlasses);
   useEffect(() => {
+    showGlassesRef.current = showGlasses;
     avatarModelRef.current?.setGlassesVisible(showGlasses);
   }, [showGlasses]);
 
@@ -186,7 +188,7 @@ export const AvatarCanvas: React.FC<AvatarCanvasProps> = ({
     // 5. Instantiate and Load Avatar Model
     const model = new AvatarModel();
     avatarModelRef.current = model;
-    model.setGlassesVisible(showGlasses);
+    model.setGlassesVisible(showGlassesRef.current);
     scene.add(model.rootGroup);
 
     model
@@ -271,7 +273,7 @@ export const AvatarCanvas: React.FC<AvatarCanvasProps> = ({
       model.dispose();
       avatarModelRef.current = null;
     };
-  }, [onError, onLoaded, showGlasses]);
+  }, [onError, onLoaded]);
 
   return (
     <div
