@@ -6,7 +6,7 @@
   "punctuate": true,
   "format_text": true,
   "word_boost_param": "high",
-  "end_utterance_silence_threshold": 700,
+  "end_utterance_silence_threshold": 600,
   "disable_partial_transcripts": false,
   "_usage_example": {
     "note": "In backend/node-service/src/index.js, import domain_vocabulary.json and spread word_boost into this config",
