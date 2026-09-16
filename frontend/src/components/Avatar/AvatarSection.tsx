@@ -61,6 +61,9 @@ export const AvatarSection: React.FC<AvatarSectionProps> = ({
   const isSpeaking = propIsSpeaking || isSpeakingTest;
   const phonemes = propPhonemes || internalPhonemes;
 
+  const localWordBoundaryRef = React.useRef<((word: string) => void) | null>(null);
+  const effectiveBoundaryRef = onWordBoundaryRef || localWordBoundaryRef;
+
   // Sync prop if provided
   React.useEffect(() => {
     if (propSentiment) setSentiment(propSentiment);
@@ -75,19 +78,52 @@ export const AvatarSection: React.FC<AvatarSectionProps> = ({
 
   const handleTestSpeech = () => {
     if (isSpeaking) return;
-    setIsSpeakingTest(true);
     setSentiment('explaining');
 
     const testSentence = 'Let us analyze the algorithm time complexity.';
-    const testPhonemes = generatePhonemesFromText(testSentence, 1.05);
-    setInternalPhonemes(testPhonemes);
+    // Use studio-calibrated DEMO_PHONEME_SEQUENCE perfectly matched to this sentence
+    setInternalPhonemes(DEMO_PHONEME_SEQUENCE);
 
     // Use Web Speech API to speak the sample sentence simultaneously
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       window.speechSynthesis.cancel();
+      try {
+        window.speechSynthesis.resume();
+      } catch {
+        // Safe ignore
+      }
+
       const utterance = new SpeechSynthesisUtterance(testSentence);
-      utterance.rate = 1.05;
+      utterance.rate = 1.0;
       utterance.pitch = 1.0;
+
+      // Select natural English voice if available in browser
+      const voices = window.speechSynthesis.getVoices();
+      const voice = voices.find(
+        (v) =>
+          v.lang.startsWith('en') &&
+          (v.name.includes('Natural') ||
+            v.name.includes('Google') ||
+            v.name.includes('Zira') ||
+            v.name.includes('Samantha') ||
+            v.name.includes('David'))
+      );
+      if (voice) utterance.voice = voice;
+
+      // Only start mouth animation at the exact instant audio begins
+      utterance.onstart = () => {
+        setIsSpeakingTest(true);
+      };
+
+      // Accurate word boundary extraction for live lip-sync
+      utterance.onboundary = (ev) => {
+        if (ev.name === 'word') {
+          const remainder = testSentence.slice(ev.charIndex);
+          const match = remainder.match(/^[\w']+/);
+          const word = match ? match[0] : '';
+          if (word) effectiveBoundaryRef.current?.(word);
+        }
+      };
 
       utterance.onend = () => {
         setIsSpeakingTest(false);
@@ -98,15 +134,17 @@ export const AvatarSection: React.FC<AvatarSectionProps> = ({
       utterance.onerror = () => {
         setIsSpeakingTest(false);
         setInternalPhonemes(null);
+        setSentiment('idle');
       };
 
       window.speechSynthesis.speak(utterance);
     } else {
+      setIsSpeakingTest(true);
       setTimeout(() => {
         setIsSpeakingTest(false);
         setInternalPhonemes(null);
         setSentiment('encouraging');
-      }, 2600);
+      }, 3500);
     }
   };
 
@@ -157,7 +195,7 @@ export const AvatarSection: React.FC<AvatarSectionProps> = ({
           isSpeaking={isSpeaking}
           phonemeTimeline={phonemes}
           showGlasses={showGlasses}
-          onWordBoundaryRef={onWordBoundaryRef}
+          onWordBoundaryRef={effectiveBoundaryRef}
         />
 
         {/* Speaking Audio Indicator Overlay */}

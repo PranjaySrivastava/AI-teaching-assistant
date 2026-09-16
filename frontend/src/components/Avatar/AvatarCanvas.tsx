@@ -80,6 +80,12 @@ export const AvatarCanvas: React.FC<AvatarCanvasProps> = ({
     lipSyncCtrlRef.current?.setAudioLevel(audioReactiveLevel);
   }, [audioReactiveLevel]);
 
+  // Keep latest isSpeaking in ref for 60fps render loop
+  const isSpeakingRef = useRef(isSpeaking);
+  useEffect(() => {
+    isSpeakingRef.current = isSpeaking;
+  }, [isSpeaking]);
+
   // Toggle glasses on model
   const showGlassesRef = useRef(showGlasses);
   useEffect(() => {
@@ -252,7 +258,8 @@ export const AvatarCanvas: React.FC<AvatarCanvasProps> = ({
         exprData.weights,
         visemeData,
         exprData.headTiltZ,
-        exprData.blinkWeight
+        exprData.blinkWeight,
+        isSpeakingRef.current
       );
 
       renderer.render(scene, camera);

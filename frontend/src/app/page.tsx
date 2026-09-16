@@ -60,8 +60,12 @@ export default function Home() {
     setSentiment('thinking');
     setSpokenText(`Analyzing: "${q}"...`);
 
+    const backendUrl =
+      process.env.NEXT_PUBLIC_BACKEND_URL ||
+      'https://ai-teaching-assistant-backend-service.onrender.com';
+
     try {
-      const res = await fetch('http://localhost:5000/api/ask', {
+      const res = await fetch(`${backendUrl}/api/ask`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question: q }),
@@ -99,8 +103,10 @@ export default function Home() {
         // Real-time word-level sync — fires at the exact moment each word is spoken
         utterance.onboundary = (ev) => {
           if (ev.name === 'word') {
-            const word = answer.substring(ev.charIndex, ev.charIndex + (ev.charLength || 8));
-            onWordBoundaryRef.current?.(word.trim());
+            const remainder = answer.slice(ev.charIndex);
+            const match = remainder.match(/^[\w']+/);
+            const word = match ? match[0] : '';
+            if (word) onWordBoundaryRef.current?.(word);
           }
         };
 
@@ -144,11 +150,10 @@ export default function Home() {
 
         utterance.onboundary = (ev) => {
           if (ev.name === 'word') {
-            const word = fallbackAnswer.substring(
-              ev.charIndex,
-              ev.charIndex + (ev.charLength || 8)
-            );
-            onWordBoundaryRef.current?.(word.trim());
+            const remainder = fallbackAnswer.slice(ev.charIndex);
+            const match = remainder.match(/^[\w']+/);
+            const word = match ? match[0] : '';
+            if (word) onWordBoundaryRef.current?.(word);
           }
         };
 
@@ -181,12 +186,74 @@ export default function Home() {
     askQuestion(question);
   };
 
+  const recognitionRef = useRef<any>(null);
+
   const toggleRecording = () => {
-    setIsRecording(!isRecording);
-    if (!isRecording) {
-      // Prompt student with sample question when microphone toggled
-      askQuestion('How does QuickSort choose a pivot?');
+    if (isRecording) {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch {}
+      }
+      setIsRecording(false);
+      return;
     }
+
+    // Support live voice input via browser SpeechRecognition API
+    if (typeof window !== 'undefined') {
+      const SpeechRecognition =
+        (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+      if (SpeechRecognition) {
+        try {
+          const recognition = new SpeechRecognition();
+          recognition.continuous = false;
+          recognition.interimResults = true;
+          recognition.lang = 'en-US';
+
+          let capturedTranscript = '';
+
+          recognition.onstart = () => {
+            setIsRecording(true);
+            setQuestion('Listening to your voice...');
+          };
+
+          recognition.onresult = (event: any) => {
+            capturedTranscript = Array.from(event.results)
+              .map((res: any) => res[0].transcript)
+              .join('');
+            setQuestion(capturedTranscript);
+          };
+
+          recognition.onend = () => {
+            setIsRecording(false);
+            const finalQuery = capturedTranscript.trim();
+            if (finalQuery && finalQuery !== 'Listening to your voice...') {
+              askQuestion(finalQuery);
+            }
+          };
+
+          recognition.onerror = (err: any) => {
+            console.warn('Speech recognition error, using sample question fallback:', err);
+            setIsRecording(false);
+            askQuestion('How does QuickSort choose a pivot?');
+          };
+
+          recognitionRef.current = recognition;
+          recognition.start();
+          return;
+        } catch (err) {
+          console.warn('Could not start live voice recognition, using fallback:', err);
+        }
+      }
+    }
+
+    // Fallback if microphone access is unavailable
+    setIsRecording(true);
+    setTimeout(() => {
+      setIsRecording(false);
+      askQuestion('How does QuickSort choose a pivot?');
+    }, 1200);
   };
 
   return (

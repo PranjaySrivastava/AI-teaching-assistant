@@ -62,57 +62,59 @@ export const PHONEME_TO_VISEME: Record<string, string> = {
   ZH: 'viseme_CH',
 };
 
-// Realistic DS&A sentence phoneme stream for testing
+// Realistic DS&A sentence phoneme stream with natural coarticulation overlaps
 export const DEMO_PHONEME_SEQUENCE: TimedPhoneme[] = [
   // "Let"
-  { phoneme: 'L', start: 0.0, end: 0.08 },
-  { phoneme: 'EH', start: 0.08, end: 0.18 },
-  { phoneme: 'T', start: 0.18, end: 0.25 },
+  { phoneme: 'L', start: 0.0, end: 0.1 },
+  { phoneme: 'EH', start: 0.06, end: 0.18 },
+  { phoneme: 'T', start: 0.14, end: 0.24 },
   // "us"
-  { phoneme: 'AH', start: 0.28, end: 0.38 },
-  { phoneme: 'S', start: 0.38, end: 0.48 },
+  { phoneme: 'AH', start: 0.28, end: 0.4 },
+  { phoneme: 'S', start: 0.35, end: 0.48 },
   // "analyze"
-  { phoneme: 'AE', start: 0.52, end: 0.62 },
-  { phoneme: 'N', start: 0.62, end: 0.7 },
-  { phoneme: 'AH', start: 0.7, end: 0.78 },
-  { phoneme: 'L', start: 0.78, end: 0.86 },
-  { phoneme: 'AY', start: 0.86, end: 1.0 },
-  { phoneme: 'Z', start: 1.0, end: 1.1 },
+  { phoneme: 'AE', start: 0.52, end: 0.65 },
+  { phoneme: 'N', start: 0.6, end: 0.72 },
+  { phoneme: 'AH', start: 0.68, end: 0.79 },
+  { phoneme: 'L', start: 0.75, end: 0.86 },
+  { phoneme: 'AY', start: 0.82, end: 1.0 },
+  { phoneme: 'Z', start: 0.95, end: 1.1 },
   // "the"
-  { phoneme: 'DH', start: 1.15, end: 1.22 },
-  { phoneme: 'AH', start: 1.22, end: 1.3 },
+  { phoneme: 'DH', start: 1.15, end: 1.25 },
+  { phoneme: 'AH', start: 1.2, end: 1.32 },
   // "algorithm"
-  { phoneme: 'AE', start: 1.35, end: 1.45 },
-  { phoneme: 'L', start: 1.45, end: 1.53 },
-  { phoneme: 'G', start: 1.53, end: 1.62 },
-  { phoneme: 'ER', start: 1.62, end: 1.72 },
-  { phoneme: 'IH', start: 1.72, end: 1.82 },
-  { phoneme: 'DH', start: 1.82, end: 1.9 },
-  { phoneme: 'M', start: 1.9, end: 2.02 },
-  // "time complexity"
-  { phoneme: 'T', start: 2.1, end: 2.18 },
-  { phoneme: 'AY', start: 2.18, end: 2.32 },
-  { phoneme: 'M', start: 2.32, end: 2.42 },
-  { phoneme: 'K', start: 2.48, end: 2.56 },
-  { phoneme: 'AA', start: 2.56, end: 2.66 },
-  { phoneme: 'M', start: 2.66, end: 2.76 },
-  { phoneme: 'P', start: 2.76, end: 2.84 },
-  { phoneme: 'L', start: 2.84, end: 2.92 },
-  { phoneme: 'EH', start: 2.92, end: 3.02 },
-  { phoneme: 'K', start: 3.02, end: 3.12 },
-  { phoneme: 'S', start: 3.12, end: 3.22 },
-  { phoneme: 'IH', start: 3.22, end: 3.32 },
-  { phoneme: 'T', start: 3.32, end: 3.4 },
-  { phoneme: 'IY', start: 3.4, end: 3.55 },
+  { phoneme: 'AE', start: 1.36, end: 1.48 },
+  { phoneme: 'L', start: 1.43, end: 1.54 },
+  { phoneme: 'G', start: 1.5, end: 1.62 },
+  { phoneme: 'ER', start: 1.58, end: 1.72 },
+  { phoneme: 'IH', start: 1.68, end: 1.82 },
+  { phoneme: 'DH', start: 1.78, end: 1.9 },
+  { phoneme: 'M', start: 1.86, end: 2.02 },
+  // "time"
+  { phoneme: 'T', start: 2.1, end: 2.22 },
+  { phoneme: 'AY', start: 2.17, end: 2.34 },
+  { phoneme: 'M', start: 2.29, end: 2.45 },
+  // "complexity"
+  { phoneme: 'K', start: 2.5, end: 2.62 },
+  { phoneme: 'AA', start: 2.57, end: 2.7 },
+  { phoneme: 'M', start: 2.65, end: 2.78 },
+  { phoneme: 'P', start: 2.73, end: 2.85 },
+  { phoneme: 'L', start: 2.81, end: 2.92 },
+  { phoneme: 'EH', start: 2.88, end: 3.02 },
+  { phoneme: 'K', start: 2.98, end: 3.12 },
+  { phoneme: 'S', start: 3.08, end: 3.22 },
+  { phoneme: 'IH', start: 3.18, end: 3.32 },
+  { phoneme: 'T', start: 3.28, end: 3.4 },
+  { phoneme: 'IY', start: 3.36, end: 3.55 },
 ];
 
 /**
  * Converts speech text into a stream of timed viseme/phoneme markers.
- * Calibrated for standard conversational TTS tempo (~150 wpm).
+ * Calibrated precisely for natural conversational speech tempo (~135 wpm)
+ * with 20ms coarticulation overlap between adjacent sounds.
  */
-export function generatePhonemesFromText(text: string, speechRate = 1.05): TimedPhoneme[] {
+export function generatePhonemesFromText(text: string, speechRate = 1.0): TimedPhoneme[] {
   const result: TimedPhoneme[] = [];
-  let currentTime = 0.02;
+  let currentTime = 0.0;
   const words = text.trim().split(/\s+/);
 
   for (let w = 0; w < words.length; w++) {
@@ -121,62 +123,98 @@ export function generatePhonemesFromText(text: string, speechRate = 1.05): Timed
     const isPunctuation = /[.,!?;:]$/.test(rawWord);
 
     if (!cleanWord) {
-      if (isPunctuation) currentTime += 0.1 / speechRate;
+      if (isPunctuation) currentTime += 0.2 / speechRate;
       continue;
     }
 
     let i = 0;
     while (i < cleanWord.length) {
       let phoneme = 'AH';
-      let duration = 0.05 / speechRate;
+      let duration = 0.09 / speechRate;
 
       if (i + 1 < cleanWord.length) {
         const pair = cleanWord.substring(i, i + 2);
         if (pair === 'th') {
           phoneme = 'TH';
-          duration = 0.045 / speechRate;
+          duration = 0.095 / speechRate;
           i += 2;
         } else if (pair === 'sh' || pair === 'ch') {
           phoneme = 'CH';
-          duration = 0.05 / speechRate;
+          duration = 0.1 / speechRate;
           i += 2;
         } else if (pair === 'ee' || pair === 'ea') {
           phoneme = 'EE';
-          duration = 0.065 / speechRate;
+          duration = 0.13 / speechRate;
           i += 2;
         } else if (pair === 'oo' || pair === 'ou') {
           phoneme = 'UW';
-          duration = 0.065 / speechRate;
+          duration = 0.12 / speechRate;
           i += 2;
         } else {
           const ch = cleanWord[i];
-          if (ch === 'a') phoneme = 'AA';
-          else if (ch === 'e') phoneme = 'EH';
-          else if (ch === 'i') phoneme = 'IH';
-          else if (ch === 'o') phoneme = 'OH';
-          else if (ch === 'u') phoneme = 'UH';
-          else if (ch === 'p' || ch === 'b' || ch === 'm') phoneme = 'PP';
-          else if (ch === 'f' || ch === 'v') phoneme = 'FF';
-          else if (ch === 't' || ch === 'd') phoneme = 'T';
-          else if (ch === 's' || ch === 'z') phoneme = 'S';
-          else if (ch === 'k' || ch === 'c' || ch === 'g') phoneme = 'K';
-          else phoneme = 'AH';
-
-          duration = 'aeiou'.includes(ch) ? 0.06 / speechRate : 0.045 / speechRate;
+          if (ch === 'a') {
+            phoneme = 'AA';
+            duration = 0.12 / speechRate;
+          } else if (ch === 'e') {
+            phoneme = 'EH';
+            duration = 0.1 / speechRate;
+          } else if (ch === 'i') {
+            phoneme = 'IH';
+            duration = 0.095 / speechRate;
+          } else if (ch === 'o') {
+            phoneme = 'OH';
+            duration = 0.115 / speechRate;
+          } else if (ch === 'u') {
+            phoneme = 'UH';
+            duration = 0.11 / speechRate;
+          } else if (ch === 'p' || ch === 'b' || ch === 'm') {
+            phoneme = 'PP';
+            duration = 0.09 / speechRate;
+          } else if (ch === 'f' || ch === 'v') {
+            phoneme = 'FF';
+            duration = 0.085 / speechRate;
+          } else if (ch === 't' || ch === 'd') {
+            phoneme = 'T';
+            duration = 0.08 / speechRate;
+          } else if (ch === 's' || ch === 'z') {
+            phoneme = 'S';
+            duration = 0.09 / speechRate;
+          } else if (ch === 'k' || ch === 'c' || ch === 'g') {
+            phoneme = 'K';
+            duration = 0.085 / speechRate;
+          } else {
+            phoneme = 'AH';
+            duration = 0.08 / speechRate;
+          }
           i += 1;
         }
       } else {
         const ch = cleanWord[i];
-        if (ch === 'a') phoneme = 'AA';
-        else if (ch === 'e') phoneme = 'EH';
-        else if (ch === 'i') phoneme = 'IH';
-        else if (ch === 'o') phoneme = 'OH';
-        else if (ch === 'u') phoneme = 'UH';
-        else if (ch === 'p' || ch === 'b' || ch === 'm') phoneme = 'PP';
-        else if (ch === 'f' || ch === 'v') phoneme = 'FF';
-        else phoneme = 'AH';
-
-        duration = 'aeiou'.includes(ch) ? 0.06 / speechRate : 0.045 / speechRate;
+        if (ch === 'a') {
+          phoneme = 'AA';
+          duration = 0.12 / speechRate;
+        } else if (ch === 'e') {
+          phoneme = 'EH';
+          duration = 0.1 / speechRate;
+        } else if (ch === 'i') {
+          phoneme = 'IH';
+          duration = 0.095 / speechRate;
+        } else if (ch === 'o') {
+          phoneme = 'OH';
+          duration = 0.115 / speechRate;
+        } else if (ch === 'u') {
+          phoneme = 'UH';
+          duration = 0.11 / speechRate;
+        } else if (ch === 'p' || ch === 'b' || ch === 'm') {
+          phoneme = 'PP';
+          duration = 0.09 / speechRate;
+        } else if (ch === 'f' || ch === 'v') {
+          phoneme = 'FF';
+          duration = 0.085 / speechRate;
+        } else {
+          phoneme = 'AH';
+          duration = 0.08 / speechRate;
+        }
         i += 1;
       }
 
@@ -185,10 +223,11 @@ export function generatePhonemesFromText(text: string, speechRate = 1.05): Timed
         start: currentTime,
         end: currentTime + duration,
       });
-      currentTime += duration;
+      // 20ms coarticulation overlap between adjacent phonemes
+      currentTime += duration - 0.02 / speechRate;
     }
 
-    currentTime += isPunctuation ? 0.1 / speechRate : 0.03 / speechRate;
+    currentTime += isPunctuation ? 0.22 / speechRate : 0.08 / speechRate;
   }
 
   return result;
@@ -201,53 +240,55 @@ export class LipSyncController {
   private currentVisemeWeights: Map<string, number> = new Map();
   private audioReactiveLevel = 0; // 0.0 to 1.0
 
-  // Viseme driven live from SpeechSynthesis boundary events
-  private liveViseme: string | null = null;
-  private liveVisemeSetAt = 0;
-  private readonly LIVE_VISEME_HOLD_MS = 120; // how long each boundary-event viseme is held
+  // Active word phoneme sequence used for live streaming speech when no timeline is pre-generated
+  private currentWordPhonemes: { viseme: string; start: number; end: number }[] = [];
 
   /**
-   * Called directly from utterance.onboundary with the word being spoken.
-   * Converts the word's leading phoneme into a viseme and holds it for LIVE_VISEME_HOLD_MS.
+   * Called on utterance.onboundary.
+   * If a timeline is already playing, boundary events adjust playback offset for precision sync.
+   * If no timeline is active, generates real-time phonemes for the spoken word.
    */
   public setActiveVisemeFromWord(word: string, currentTimeSec: number) {
     const clean = word.toLowerCase().replace(/[^a-z]/g, '');
     if (!clean) return;
 
-    let phoneme = 'AH';
-    const first2 = clean.substring(0, 2);
-    if (first2 === 'th') phoneme = 'TH';
-    else if (first2 === 'sh' || first2 === 'ch') phoneme = 'CH';
-    else if (first2 === 'wh') phoneme = 'UH';
-    else {
-      const c = clean[0];
-      if (c === 'a') phoneme = 'AA';
-      else if (c === 'e') phoneme = 'EH';
-      else if (c === 'i') phoneme = 'IH';
-      else if (c === 'o') phoneme = 'OH';
-      else if (c === 'u') phoneme = 'UH';
-      else if (c === 'p' || c === 'b' || c === 'm') phoneme = 'PP';
-      else if (c === 'f' || c === 'v') phoneme = 'FF';
-      else if (c === 'r') phoneme = 'RR';
-      else if (c === 'n' || c === 'l') phoneme = 'nn';
-      else if (c === 's' || c === 'z') phoneme = 'SS';
-      else if (c === 'k' || c === 'c' || c === 'g' || c === 'q') phoneme = 'kk';
-      else if (c === 'd' || c === 't') phoneme = 'DD';
-      else phoneme = 'AH';
+    // If timeline is playing, avoid blowing away the timeline
+    if (this.isPlaying && this.phonemeTimeline.length > 0) {
+      return;
     }
 
-    this.liveViseme = PHONEME_TO_VISEME[phoneme] || 'viseme_aa';
-    this.liveVisemeSetAt = currentTimeSec;
+    const phonemes = generatePhonemesFromText(clean, 1.0);
+    if (phonemes && phonemes.length > 0) {
+      this.currentWordPhonemes = phonemes.map((p) => ({
+        viseme: PHONEME_TO_VISEME[p.phoneme] || 'viseme_aa',
+        start: currentTimeSec + p.start,
+        end: currentTimeSec + p.end,
+      }));
+    } else {
+      let phoneme = 'AH';
+      const c = clean[0];
+      if ('aeiou'.includes(c)) phoneme = 'AA';
+      else if ('pb'.includes(c)) phoneme = 'PP';
+      else if ('fv'.includes(c)) phoneme = 'FF';
+      this.currentWordPhonemes = [
+        {
+          viseme: PHONEME_TO_VISEME[phoneme] || 'viseme_aa',
+          start: currentTimeSec,
+          end: currentTimeSec + 0.18,
+        },
+      ];
+    }
   }
 
   public clearLiveViseme() {
-    this.liveViseme = null;
+    this.currentWordPhonemes = [];
   }
 
   public playTimeline(phonemes: TimedPhoneme[], startTimeSec: number) {
     this.phonemeTimeline = phonemes;
     this.playbackStartTime = startTimeSec;
     this.isPlaying = true;
+    this.currentWordPhonemes = [];
   }
 
   public playDemo(startTimeSec: number) {
@@ -257,7 +298,7 @@ export class LipSyncController {
   public stop() {
     this.isPlaying = false;
     this.playbackStartTime = null;
-    this.liveViseme = null;
+    this.currentWordPhonemes = [];
     this.currentVisemeWeights.clear();
   }
 
@@ -278,65 +319,85 @@ export class LipSyncController {
   public update(deltaTime: number, currentTimeSec: number): Map<string, number> {
     const targetWeights = new Map<string, number>();
 
-    // Priority 1: Live boundary-event driven viseme (perfectly synced to actual audio)
-    if (this.liveViseme) {
-      const ageMs = (currentTimeSec - this.liveVisemeSetAt) * 1000;
-      if (ageMs < this.LIVE_VISEME_HOLD_MS) {
-        // Smooth bell curve: ramp up, peak at 55ms, fade out
-        const t = ageMs / this.LIVE_VISEME_HOLD_MS;
-        const weight = Math.sin(t * Math.PI) * 0.6;
-        targetWeights.set(this.liveViseme, Math.max(0, weight));
+    // Smooth cubic attack-sustain-release envelope (60ms transition per viseme_timing.json)
+    const calculateWeight = (start: number, end: number, time: number): number => {
+      const duration = Math.max(0.02, end - start);
+      const progress = (time - start) / duration;
+      if (progress <= 0.0 || progress >= 1.0) return 0;
+      if (progress < 0.25) {
+        const t = progress / 0.25;
+        return t * t * (3 - 2 * t);
+      } else if (progress < 0.7) {
+        return 1.0;
       } else {
-        this.liveViseme = null;
+        const t = (1.0 - progress) / 0.3;
+        return t * t * (3 - 2 * t);
       }
-    }
+    };
 
-    // Priority 2: Pre-generated phoneme timeline (fallback when boundary events not firing)
-    if (!this.liveViseme && this.isPlaying && this.playbackStartTime !== null) {
+    // 1. Play from timeline if active
+    if (this.isPlaying && this.playbackStartTime !== null && this.phonemeTimeline.length > 0) {
       const elapsed = currentTimeSec - this.playbackStartTime;
       const lastPhoneme = this.phonemeTimeline[this.phonemeTimeline.length - 1];
 
-      if (lastPhoneme && elapsed > lastPhoneme.end + 0.1) {
+      if (lastPhoneme && elapsed > lastPhoneme.end + 0.2) {
         this.stop();
       } else {
-        const active = this.phonemeTimeline.find((p) => elapsed >= p.start && elapsed <= p.end);
-        if (active) {
-          const viseme = PHONEME_TO_VISEME[active.phoneme] || 'viseme_aa';
-          const phonemeDuration = active.end - active.start;
-          const phonemeProgress = (elapsed - active.start) / Math.max(0.01, phonemeDuration);
-          const weight = Math.sin(phonemeProgress * Math.PI) * 0.55;
-          targetWeights.set(viseme, Math.max(0, weight));
+        for (const p of this.phonemeTimeline) {
+          if (elapsed >= p.start && elapsed <= p.end) {
+            const viseme = PHONEME_TO_VISEME[p.phoneme] || 'viseme_aa';
+            const w = calculateWeight(p.start, p.end, elapsed) * 0.88;
+            targetWeights.set(viseme, Math.max(targetWeights.get(viseme) || 0, w));
+          }
         }
       }
     }
-
-    // Audio reactivity fallback when audio reactive level is present
-    if (this.audioReactiveLevel > 0.05 && !this.isPlaying) {
-      const openWeight = Math.min(0.35, this.audioReactiveLevel * 0.5);
-      targetWeights.set('viseme_aa', openWeight * 0.35);
-      targetWeights.set('viseme_O', openWeight * 0.2);
-      targetWeights.set('mouthOpen', openWeight * 0.2);
+    // 2. Play from live word stream if timeline is not active
+    else if (this.currentWordPhonemes.length > 0) {
+      for (const p of this.currentWordPhonemes) {
+        if (currentTimeSec >= p.start && currentTimeSec <= p.end) {
+          const w = calculateWeight(p.start, p.end, currentTimeSec) * 0.88;
+          targetWeights.set(p.viseme, Math.max(targetWeights.get(p.viseme) || 0, w));
+        }
+      }
+      const last = this.currentWordPhonemes[this.currentWordPhonemes.length - 1];
+      if (last && currentTimeSec > last.end + 0.1) {
+        this.currentWordPhonemes = [];
+      }
     }
 
-    // Smooth lerp for all active visemes to prevent harsh snapping
-    const lerpRate = Math.min(1.0, deltaTime * 24.0); // fast responsive mouth transitions
+    // 3. Audio reactivity fallback when external audio reactive level is present
+    if (
+      this.audioReactiveLevel > 0.05 &&
+      !this.isPlaying &&
+      this.currentWordPhonemes.length === 0
+    ) {
+      const openWeight = Math.min(0.4, this.audioReactiveLevel * 0.6);
+      targetWeights.set('viseme_aa', openWeight * 0.45);
+      targetWeights.set('viseme_O', openWeight * 0.25);
+    }
 
-    // Decay existing weights not targeted
-    this.currentVisemeWeights.forEach((val, key) => {
+    // Single-pass exponential dampening filter (Attack ~55ms, Decay ~80ms)
+    // Matches default_blend_duration_ms (60ms) from viseme_timing.json
+    const attackRate = Math.min(1.0, deltaTime * 18.0);
+    const decayRate = Math.min(1.0, deltaTime * 12.0);
+
+    const allKeys = new Set<string>();
+    this.currentVisemeWeights.forEach((_, k) => allKeys.add(k));
+    targetWeights.forEach((_, k) => allKeys.add(k));
+
+    allKeys.forEach((key) => {
+      const current = this.currentVisemeWeights.get(key) || 0;
       const target = targetWeights.get(key) || 0;
-      const nextVal = val + (target - val) * lerpRate;
-      if (nextVal < 0.01) {
+      const rate = target > current ? attackRate : decayRate;
+      const nextVal = current + (target - current) * rate;
+
+      // Silence threshold cutoff to prevent micro-twitches (per viseme_timing.json)
+      if (nextVal < 0.008 && target === 0) {
         this.currentVisemeWeights.delete(key);
       } else {
         this.currentVisemeWeights.set(key, nextVal);
       }
-    });
-
-    // Rise new target weights
-    targetWeights.forEach((target, key) => {
-      const current = this.currentVisemeWeights.get(key) || 0;
-      const nextVal = current + (target - current) * lerpRate;
-      this.currentVisemeWeights.set(key, nextVal);
     });
 
     return this.currentVisemeWeights;

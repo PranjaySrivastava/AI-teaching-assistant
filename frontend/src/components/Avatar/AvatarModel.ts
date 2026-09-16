@@ -196,7 +196,7 @@ export class AvatarModel {
     visemeWeights: Map<string, number>,
     headTiltZ: number,
     blinkWeight: number,
-    pointerPosition?: { x: number; y: number }
+    isSpeaking?: boolean
   ) {
     if (!this.isLoaded) return;
 
@@ -215,38 +215,38 @@ export class AvatarModel {
       combinedTargets[key] = (combinedTargets[key] || 0) + val;
     });
 
-    // B. Lip-sync visemes (override or blend mouth shapes with natural scaled intensity)
+    // B. Lip-sync visemes (apply authentic Oculus speech blendshapes)
+    // Head_Mesh, Teeth_Mesh, and Tongue_Mesh all natively contain sculpted Oculus visemes
+    // (viseme_aa, viseme_O, viseme_E, viseme_I, viseme_U, viseme_PP, viseme_FF, etc.)
+    // which already sculpt complete anatomical jaw, lip, and tongue positions.
+    let maxSpeechActivity = 0;
     visemeWeights.forEach((val, key) => {
-      const scale = key === 'viseme_aa' || key === 'viseme_O' ? 0.55 : 0.65;
-      combinedTargets[key] = (combinedTargets[key] || 0) + val * scale;
-    });
+      if (val > 0.005) {
+        combinedTargets[key] = (combinedTargets[key] || 0) + val * 0.92;
+        maxSpeechActivity = Math.max(maxSpeechActivity, val);
 
-    // Visible anatomical speech articulation: coupling visemes with subtle, natural jawOpen and mouthOpen
-    visemeWeights.forEach((val, key) => {
-      if (val > 0.01) {
+        // Subtle secondary nuance for vowels without over-opening the jaw
         if (key === 'viseme_aa') {
-          // Modest, realistic mouth opening (not gaping)
-          combinedTargets['jawOpen'] = Math.max(combinedTargets['jawOpen'] || 0, val * 0.28);
-          combinedTargets['mouthOpen'] = Math.max(combinedTargets['mouthOpen'] || 0, val * 0.2);
+          combinedTargets['jawOpen'] = Math.max(combinedTargets['jawOpen'] || 0, val * 0.12);
         } else if (key === 'viseme_O') {
-          combinedTargets['jawOpen'] = Math.max(combinedTargets['jawOpen'] || 0, val * 0.18);
-          combinedTargets['mouthFunnel'] = Math.max(combinedTargets['mouthFunnel'] || 0, val * 0.3);
-          combinedTargets['mouthPucker'] = Math.max(
-            combinedTargets['mouthPucker'] || 0,
+          combinedTargets['jawOpen'] = Math.max(combinedTargets['jawOpen'] || 0, val * 0.08);
+          combinedTargets['mouthFunnel'] = Math.max(
+            combinedTargets['mouthFunnel'] || 0,
             val * 0.15
           );
         } else if (key === 'viseme_E' || key === 'viseme_I') {
-          combinedTargets['jawOpen'] = Math.max(combinedTargets['jawOpen'] || 0, val * 0.12);
-          combinedTargets['mouthOpen'] = Math.max(combinedTargets['mouthOpen'] || 0, val * 0.1);
-          combinedTargets['mouthSmile'] = Math.max(combinedTargets['mouthSmile'] || 0, val * 0.12);
+          combinedTargets['mouthSmile'] = Math.max(combinedTargets['mouthSmile'] || 0, val * 0.1);
         } else if (key === 'viseme_PP') {
-          combinedTargets['jawOpen'] = 0;
-          combinedTargets['mouthClose'] = Math.max(combinedTargets['mouthClose'] || 0, val * 0.38);
-        } else if (key === 'viseme_FF' || key === 'viseme_TH' || key === 'viseme_DD') {
-          combinedTargets['jawOpen'] = Math.max(combinedTargets['jawOpen'] || 0, val * 0.1);
+          combinedTargets['mouthClose'] = Math.max(combinedTargets['mouthClose'] || 0, val * 0.35);
         }
       }
     });
+
+    // Subtle natural speaking presence: if speaking but between syllables, hold relaxed conversational parting
+    if (isSpeaking && maxSpeechActivity < 0.05) {
+      combinedTargets['jawOpen'] = Math.max(combinedTargets['jawOpen'] || 0, 0.04);
+      combinedTargets['mouthOpen'] = Math.max(combinedTargets['mouthOpen'] || 0, 0.03);
+    }
 
     // C. Blinking
     if (blinkWeight > 0.001) {
