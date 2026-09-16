@@ -16,6 +16,8 @@ interface AvatarCanvasProps {
   onError?: (err: unknown) => void;
   /** Called with each TTS word boundary so lip-sync can be driven in real time */
   onWordBoundaryRef?: React.MutableRefObject<((word: string) => void) | null>;
+  /** Spoken statement text for zero-lag phoneme pre-computation */
+  spokenText?: string;
 }
 
 // Procedural studio lighting environment map for realistic PBR reflections
@@ -52,6 +54,7 @@ export const AvatarCanvas: React.FC<AvatarCanvasProps> = ({
   onLoaded,
   onError,
   onWordBoundaryRef,
+  spokenText,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [loadProgress, setLoadProgress] = useState<number>(0);
@@ -70,6 +73,13 @@ export const AvatarCanvas: React.FC<AvatarCanvasProps> = ({
     lipSyncCtrlRef.current = new LipSyncController();
   }
 
+  // Pre-calculate all phonemes for the spoken text upfront (Zero-Lag Solution 1)
+  useEffect(() => {
+    if (spokenText) {
+      lipSyncCtrlRef.current?.precomputePhonemes(spokenText);
+    }
+  }, [spokenText]);
+
   // Update sentiment when prop changes
   useEffect(() => {
     expressionCtrlRef.current?.setSentiment(sentiment);
@@ -79,6 +89,12 @@ export const AvatarCanvas: React.FC<AvatarCanvasProps> = ({
   useEffect(() => {
     lipSyncCtrlRef.current?.setAudioLevel(audioReactiveLevel);
   }, [audioReactiveLevel]);
+
+  // Keep latest isSpeaking in ref for 60fps render loop
+  const isSpeakingRef = useRef(isSpeaking);
+  useEffect(() => {
+    isSpeakingRef.current = isSpeaking;
+  }, [isSpeaking]);
 
   // Toggle glasses on model
   const showGlassesRef = useRef(showGlasses);
@@ -100,15 +116,19 @@ export const AvatarCanvas: React.FC<AvatarCanvasProps> = ({
     }
   }, [onWordBoundaryRef]);
 
-  // Play phoneme timeline (fallback) if provided; stop when speech ends
+  // Synchronise phoneme timeline and boundary-event mode with TTS audio onset.
+  // Called when isSpeaking flips or a new phoneme timeline arrives.
   useEffect(() => {
-    if (isSpeaking && phonemeTimeline && phonemeTimeline.length > 0) {
-      // Delay by one frame so the lip-sync controller is running before the TTS starts
-      const raf = requestAnimationFrame(() => {
+    if (isSpeaking) {
+      if (phonemeTimeline && phonemeTimeline.length > 0) {
+        // Start the pre-generated fallback timeline immediately at audio onset.
+        // Word boundary events will override this on a per-word basis (Priority 1 in LipSyncController).
         lipSyncCtrlRef.current?.playTimeline(phonemeTimeline, performance.now() / 1000);
-      });
-      return () => cancelAnimationFrame(raf);
-    } else if (!isSpeaking) {
+      }
+      // If no timeline is provided, boundary events alone will drive the mouth —
+      // the LipSyncController's currentWordPhonemes will be populated by onboundary callbacks.
+    } else {
+      // Audio finished — clear everything
       lipSyncCtrlRef.current?.stop();
     }
   }, [isSpeaking, phonemeTimeline]);
@@ -252,7 +272,8 @@ export const AvatarCanvas: React.FC<AvatarCanvasProps> = ({
         exprData.weights,
         visemeData,
         exprData.headTiltZ,
-        exprData.blinkWeight
+        exprData.blinkWeight,
+        isSpeakingRef.current
       );
 
       renderer.render(scene, camera);

@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import { Mic, MicOff, Play, Sparkles, Code2, BarChart3, Bot, Send } from 'lucide-react';
 import { Sentiment } from '../components/Avatar/expressionController';
 import { TimedPhoneme, generatePhonemesFromText } from '../components/Avatar/lipSyncController';
+import { assemblyAiStream } from '../services/assemblyAiStream';
 
 const AvatarSection = dynamic(() => import('../components/Avatar/AvatarSection'), {
   ssr: false,
@@ -51,6 +52,131 @@ export default function Home() {
 
   // Ref that AvatarCanvas will populate with a function to forward word boundary events
   const onWordBoundaryRef = useRef<((word: string) => void) | null>(null);
+  // Persistent reference to prevent Chrome/V8 garbage collection mid-speech
+  const activeUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const speechSafetyTimerRef = useRef<NodeJS.Timeout | null>(null);
+  // Reference for server audio playback (Option B: ElevenLabs)
+  const audioElementRef = useRef<HTMLAudioElement | null>(null);
+
+  const speakStatement = (statementText: string) => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+      setIsSpeaking(true);
+      setTimeout(
+        () => {
+          setIsSpeaking(false);
+          setActivePhonemes(null);
+          setSentiment('encouraging');
+        },
+        Math.min(12000, Math.max(3000, statementText.split(/\s+/).length * 320))
+      );
+      return;
+    }
+
+    try {
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.resume();
+    } catch {}
+
+    if (speechSafetyTimerRef.current) {
+      clearTimeout(speechSafetyTimerRef.current);
+      speechSafetyTimerRef.current = null;
+    }
+
+    const utterance = new SpeechSynthesisUtterance(statementText);
+    activeUtteranceRef.current = utterance;
+    (window as any).__activeUtterance = utterance;
+
+    utterance.rate = 1.02;
+    utterance.pitch = 1.0;
+
+    // Pick natural, expressive voice if available
+    const selectBestVoice = () => {
+      const voices = window.speechSynthesis.getVoices();
+      if (!voices || voices.length === 0) return null;
+      return (
+        voices.find(
+          (v) =>
+            v.lang.startsWith('en') &&
+            (v.name.includes('Natural') ||
+              v.name.includes('Google') ||
+              v.name.includes('Jenny') ||
+              v.name.includes('Aria') ||
+              v.name.includes('Guy') ||
+              v.name.includes('Zira') ||
+              v.name.includes('Samantha') ||
+              v.name.includes('David'))
+        ) ||
+        voices.find((v) => v.lang.startsWith('en')) ||
+        voices[0]
+      );
+    };
+
+    const bestVoice = selectBestVoice();
+    if (bestVoice) utterance.voice = bestVoice;
+
+    if (window.speechSynthesis.onvoiceschanged === null) {
+      window.speechSynthesis.onvoiceschanged = () => {
+        const v = selectBestVoice();
+        if (v && activeUtteranceRef.current) {
+          activeUtteranceRef.current.voice = v;
+        }
+      };
+    }
+
+    utterance.onstart = () => {
+      setIsSpeaking(true);
+    };
+
+    utterance.onboundary = (ev) => {
+      if (ev.name === 'word') {
+        const remainder = statementText.slice(ev.charIndex);
+        const match = remainder.match(/^[\w']+/);
+        const word = match ? match[0] : '';
+        if (word) {
+          onWordBoundaryRef.current?.(word);
+        }
+      }
+    };
+
+    utterance.onend = () => {
+      setIsSpeaking(false);
+      setActivePhonemes(null);
+      setSentiment('encouraging');
+      activeUtteranceRef.current = null;
+    };
+
+    utterance.onerror = (ev) => {
+      console.warn('Speech synthesis finished or canceled:', ev);
+      setIsSpeaking(false);
+      setActivePhonemes(null);
+      setSentiment('idle');
+      activeUtteranceRef.current = null;
+    };
+
+    window.speechSynthesis.speak(utterance);
+    try {
+      window.speechSynthesis.resume();
+    } catch {}
+
+    // Safety fallback: ensure isSpeaking becomes true even if onstart event is delayed
+    speechSafetyTimerRef.current = setTimeout(() => {
+      if (activeUtteranceRef.current === utterance) {
+        setIsSpeaking(true);
+      }
+    }, 150);
+
+    // Keep-alive for longer pedagogical explanations to counter Chromium's 15s pause bug
+    const keepAlive = setInterval(() => {
+      if (!window.speechSynthesis.speaking || activeUtteranceRef.current !== utterance) {
+        clearInterval(keepAlive);
+      } else {
+        try {
+          window.speechSynthesis.pause();
+          window.speechSynthesis.resume();
+        } catch {}
+      }
+    }, 8000);
+  };
 
   const askQuestion = async (queryText: string) => {
     const q = queryText.trim();
@@ -60,8 +186,12 @@ export default function Home() {
     setSentiment('thinking');
     setSpokenText(`Analyzing: "${q}"...`);
 
+    const backendUrl =
+      process.env.NEXT_PUBLIC_BACKEND_URL ||
+      'https://ai-teaching-assistant-backend-service.onrender.com';
+
     try {
-      const res = await fetch('http://localhost:5000/api/ask', {
+      const res = await fetch(`${backendUrl}/api/ask`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question: q }),
@@ -81,97 +211,76 @@ export default function Home() {
         setAlgorithmTitle(data.visualSequence.title);
       }
 
-      // Generate phonemes as fallback timeline; the real sync will come from onboundary events
-      const phonemes = generatePhonemesFromText(answer, 1.05);
-      setActivePhonemes(phonemes);
+      // Option B: Server Audio with ElevenLabs Timestamps (if returned from backend)
+      if (data.audioUrl && typeof data.audioUrl === 'string' && data.audioUrl.trim().length > 0) {
+        if (
+          data.phonemeTimings &&
+          Array.isArray(data.phonemeTimings) &&
+          data.phonemeTimings.length > 0
+        ) {
+          setActivePhonemes(data.phonemeTimings);
+        } else {
+          setActivePhonemes(generatePhonemesFromText(answer, 1.02));
+        }
 
-      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(answer);
-        utterance.rate = 1.05;
-        utterance.pitch = 1.0;
+        if (audioElementRef.current) {
+          audioElementRef.current.pause();
+          audioElementRef.current = null;
+        }
 
-        // Only start mouth animation exactly when audio begins
-        utterance.onstart = () => {
+        const audio = new Audio(data.audioUrl);
+        audioElementRef.current = audio;
+
+        audio.onplay = () => {
           setIsSpeaking(true);
         };
-
-        // Real-time word-level sync — fires at the exact moment each word is spoken
-        utterance.onboundary = (ev) => {
-          if (ev.name === 'word') {
-            const word = answer.substring(ev.charIndex, ev.charIndex + (ev.charLength || 8));
-            onWordBoundaryRef.current?.(word.trim());
-          }
-        };
-
-        utterance.onend = () => {
+        audio.onended = () => {
           setIsSpeaking(false);
           setActivePhonemes(null);
           setSentiment('encouraging');
+          audioElementRef.current = null;
         };
-        utterance.onerror = () => {
-          setIsSpeaking(false);
-          setActivePhonemes(null);
-          setSentiment('idle');
+        audio.onerror = () => {
+          console.warn('Error playing server audio, falling back to client speech synthesis');
+          audioElementRef.current = null;
+          speakStatement(answer);
         };
 
-        window.speechSynthesis.speak(utterance);
+        audio.play().catch((err) => {
+          console.warn('Audio autoplay restricted, falling back to client speech synthesis:', err);
+          speakStatement(answer);
+        });
       } else {
-        setIsSpeaking(true);
-        setTimeout(() => {
-          setIsSpeaking(false);
-          setActivePhonemes(null);
-          setSentiment('encouraging');
-        }, 4000);
+        // Zero-Lag Procedural Phonemes + Real-time Word Boundary Sync
+        const phonemes = generatePhonemesFromText(answer, 1.05);
+        setActivePhonemes(phonemes);
+        speakStatement(answer);
       }
     } catch (err) {
-      console.warn('Backend query error, using local fallback:', err);
-      const fallbackAnswer = `Let us analyze ${q}. In computer science, we examine the problem constraints and asymptotic complexity to formulate the optimal approach.`;
+      console.warn('Backend query error, using intelligent local fallback:', err);
+      let fallbackAnswer = `Let us analyze ${q}. In computer science, we examine the problem constraints and asymptotic complexity to formulate the optimal approach.`;
+      const qLower = q.toLowerCase();
+
+      if (qLower.includes('pivot') || qLower.includes('quick')) {
+        fallbackAnswer =
+          'QuickSort works by partitioning an array around a chosen pivot element. Elements smaller than the pivot move left, and larger elements move right, then we recursively sort both partitions.';
+      } else if (qLower.includes('binary search')) {
+        fallbackAnswer =
+          'Binary search operates on sorted collections by comparing the target with the middle element. It halves the search space each step, achieving O(log n) logarithmic time complexity.';
+      } else if (qLower.includes('big-o') || qLower.includes('complexity')) {
+        fallbackAnswer =
+          'Big-O notation quantifies the worst-case asymptotic upper bound of time or memory as input size n grows, helping us compare algorithm efficiency objectively.';
+      } else if (qLower.includes('merge')) {
+        fallbackAnswer =
+          'MergeSort is a divide-and-conquer algorithm that splits the array in halves recursively until single elements remain, then merges sorted arrays back together in O(n log n) time.';
+      }
+
       setSpokenText(fallbackAnswer);
       setSentiment('explaining');
       const phonemes = generatePhonemesFromText(fallbackAnswer, 1.05);
       setActivePhonemes(phonemes);
 
-      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(fallbackAnswer);
-        utterance.rate = 1.05;
-        utterance.pitch = 1.0;
-
-        utterance.onstart = () => {
-          setIsSpeaking(true);
-        };
-
-        utterance.onboundary = (ev) => {
-          if (ev.name === 'word') {
-            const word = fallbackAnswer.substring(
-              ev.charIndex,
-              ev.charIndex + (ev.charLength || 8)
-            );
-            onWordBoundaryRef.current?.(word.trim());
-          }
-        };
-
-        utterance.onend = () => {
-          setIsSpeaking(false);
-          setActivePhonemes(null);
-          setSentiment('encouraging');
-        };
-        utterance.onerror = () => {
-          setIsSpeaking(false);
-          setActivePhonemes(null);
-          setSentiment('idle');
-        };
-
-        window.speechSynthesis.speak(utterance);
-      } else {
-        setIsSpeaking(true);
-        setTimeout(() => {
-          setIsSpeaking(false);
-          setActivePhonemes(null);
-          setSentiment('encouraging');
-        }, 3000);
-      }
+      speakStatement(fallbackAnswer);
     }
   };
 
@@ -181,12 +290,124 @@ export default function Home() {
     askQuestion(question);
   };
 
-  const toggleRecording = () => {
-    setIsRecording(!isRecording);
-    if (!isRecording) {
-      // Prompt student with sample question when microphone toggled
-      askQuestion('How does QuickSort choose a pivot?');
+  const recognitionRef = useRef<any>(null);
+
+  // Fallback to browser SpeechRecognition if AssemblyAI WebSocket is not available
+  const startBrowserSpeechFallback = () => {
+    if (typeof window !== 'undefined') {
+      const SpeechRecognition =
+        (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+      if (SpeechRecognition) {
+        try {
+          const recognition = new SpeechRecognition();
+          recognition.continuous = false;
+          recognition.interimResults = true;
+          recognition.lang = 'en-US';
+
+          let capturedTranscript = '';
+
+          recognition.onstart = () => {
+            setIsRecording(true);
+            setQuestion('Listening to your voice...');
+          };
+
+          recognition.onresult = (event: any) => {
+            capturedTranscript = Array.from(event.results)
+              .map((res: any) => res[0].transcript)
+              .join('');
+            setQuestion(capturedTranscript);
+          };
+
+          recognition.onend = () => {
+            setIsRecording(false);
+            const finalQuery = capturedTranscript.trim();
+            if (finalQuery && finalQuery !== 'Listening to your voice...') {
+              askQuestion(finalQuery);
+            }
+          };
+
+          recognition.onerror = (err: any) => {
+            console.warn('Speech recognition error:', err);
+            setIsRecording(false);
+            if (err.error === 'no-speech') {
+              setQuestion(
+                'No speech detected. Please speak into your mic or choose a question below.'
+              );
+            } else if (err.error === 'not-allowed') {
+              setQuestion('Microphone access denied. You can select or type a question below.');
+            } else {
+              setQuestion('Could not capture audio. Please select a question below.');
+            }
+          };
+
+          recognitionRef.current = recognition;
+          recognition.start();
+          return;
+        } catch (err) {
+          console.warn('Could not start live voice recognition:', err);
+        }
+      }
     }
+
+    // Graceful fallback if microphone access is completely unavailable
+    setIsRecording(false);
+    setQuestion('Microphone unavailable. Please select or type your question below.');
+  };
+
+  const toggleRecording = () => {
+    if (isRecording) {
+      if (assemblyAiStream.getIsStreaming()) {
+        assemblyAiStream.stop();
+      }
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch {}
+      }
+      setIsRecording(false);
+      return;
+    }
+
+    const backendUrl =
+      process.env.NEXT_PUBLIC_BACKEND_URL ||
+      'https://ai-teaching-assistant-backend-service.onrender.com';
+
+    // Option A: Try AssemblyAI Real-Time WebSocket Streaming first
+    assemblyAiStream
+      .start(backendUrl, {
+        onPartialTranscript: (transcript) => {
+          if (transcript) setQuestion(transcript);
+        },
+        onFinalTranscript: (transcript) => {
+          if (transcript) {
+            setQuestion(transcript);
+            setIsRecording(false);
+            askQuestion(transcript);
+          }
+        },
+        onStateChange: (streaming) => {
+          setIsRecording(streaming);
+        },
+        onError: (err) => {
+          console.warn(
+            'AssemblyAI streaming error, falling back to browser SpeechRecognition:',
+            err.message
+          );
+          startBrowserSpeechFallback();
+        },
+      })
+      .then(() => {
+        setIsRecording(true);
+        setQuestion('Listening via AssemblyAI Streaming...');
+      })
+      .catch((err) => {
+        console.warn(
+          'AssemblyAI streaming setup failed, falling back to browser SpeechRecognition:',
+          err.message
+        );
+        startBrowserSpeechFallback();
+      });
   };
 
   return (
@@ -227,6 +448,7 @@ export default function Home() {
             activePhonemes={activePhonemes}
             spokenText={spokenText}
             onWordBoundaryRef={onWordBoundaryRef}
+            onSentimentChange={setSentiment}
           />
 
           {/* Voice Control Hub */}

@@ -23,6 +23,8 @@ export interface AvatarSectionProps {
   spokenText?: string;
   /** Ref whose .current is set to a function that forwards word boundary events to the lip-sync controller */
   onWordBoundaryRef?: React.MutableRefObject<((word: string) => void) | null>;
+  /** Callback fired when user selects a mood in the UI */
+  onSentimentChange?: (sentiment: Sentiment) => void;
 }
 
 const SENTIMENT_ICONS: Record<Sentiment, React.ComponentType<{ className?: string }>> = {
@@ -52,14 +54,23 @@ export const AvatarSection: React.FC<AvatarSectionProps> = ({
   activePhonemes: propPhonemes = null,
   spokenText,
   onWordBoundaryRef,
+  onSentimentChange,
 }) => {
   const [sentiment, setSentiment] = useState<Sentiment>(propSentiment || 'explaining');
   const [internalPhonemes, setInternalPhonemes] = useState<TimedPhoneme[] | null>(null);
   const [isSpeakingTest, setIsSpeakingTest] = useState<boolean>(false);
   const [showGlasses, setShowGlasses] = useState<boolean>(false);
 
+  const updateSentiment = (newMood: Sentiment) => {
+    setSentiment(newMood);
+    onSentimentChange?.(newMood);
+  };
+
   const isSpeaking = propIsSpeaking || isSpeakingTest;
   const phonemes = propPhonemes || internalPhonemes;
+
+  const localWordBoundaryRef = React.useRef<((word: string) => void) | null>(null);
+  const effectiveBoundaryRef = onWordBoundaryRef || localWordBoundaryRef;
 
   // Sync prop if provided
   React.useEffect(() => {
@@ -75,38 +86,80 @@ export const AvatarSection: React.FC<AvatarSectionProps> = ({
 
   const handleTestSpeech = () => {
     if (isSpeaking) return;
-    setIsSpeakingTest(true);
     setSentiment('explaining');
 
     const testSentence = 'Let us analyze the algorithm time complexity.';
-    const testPhonemes = generatePhonemesFromText(testSentence, 1.05);
-    setInternalPhonemes(testPhonemes);
+    // Use studio-calibrated DEMO_PHONEME_SEQUENCE perfectly matched to this sentence
+    setInternalPhonemes(DEMO_PHONEME_SEQUENCE);
 
     // Use Web Speech API to speak the sample sentence simultaneously
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       window.speechSynthesis.cancel();
+      try {
+        window.speechSynthesis.resume();
+      } catch {}
+
       const utterance = new SpeechSynthesisUtterance(testSentence);
-      utterance.rate = 1.05;
+      (window as any).__activeTestUtterance = utterance;
+      utterance.rate = 1.0;
       utterance.pitch = 1.0;
+
+      // Select natural English voice if available in browser
+      const voices = window.speechSynthesis.getVoices();
+      const voice = voices.find(
+        (v) =>
+          v.lang.startsWith('en') &&
+          (v.name.includes('Natural') ||
+            v.name.includes('Google') ||
+            v.name.includes('Jenny') ||
+            v.name.includes('Aria') ||
+            v.name.includes('Guy') ||
+            v.name.includes('Zira') ||
+            v.name.includes('Samantha') ||
+            v.name.includes('David'))
+      );
+      if (voice) utterance.voice = voice;
+
+      // Only start mouth animation at the exact instant audio begins
+      utterance.onstart = () => {
+        setIsSpeakingTest(true);
+      };
+
+      // Accurate word boundary extraction for live lip-sync
+      utterance.onboundary = (ev) => {
+        if (ev.name === 'word') {
+          const remainder = testSentence.slice(ev.charIndex);
+          const match = remainder.match(/^[\w']+/);
+          const word = match ? match[0] : '';
+          if (word) effectiveBoundaryRef.current?.(word);
+        }
+      };
 
       utterance.onend = () => {
         setIsSpeakingTest(false);
         setInternalPhonemes(null);
         setSentiment('encouraging');
+        (window as any).__activeTestUtterance = null;
       };
 
       utterance.onerror = () => {
         setIsSpeakingTest(false);
         setInternalPhonemes(null);
+        setSentiment('idle');
+        (window as any).__activeTestUtterance = null;
       };
 
       window.speechSynthesis.speak(utterance);
+      try {
+        window.speechSynthesis.resume();
+      } catch {}
     } else {
+      setIsSpeakingTest(true);
       setTimeout(() => {
         setIsSpeakingTest(false);
         setInternalPhonemes(null);
         setSentiment('encouraging');
-      }, 2600);
+      }, 3500);
     }
   };
 
@@ -157,7 +210,8 @@ export const AvatarSection: React.FC<AvatarSectionProps> = ({
           isSpeaking={isSpeaking}
           phonemeTimeline={phonemes}
           showGlasses={showGlasses}
-          onWordBoundaryRef={onWordBoundaryRef}
+          onWordBoundaryRef={effectiveBoundaryRef}
+          spokenText={spokenText}
         />
 
         {/* Speaking Audio Indicator Overlay */}
@@ -215,10 +269,11 @@ export const AvatarSection: React.FC<AvatarSectionProps> = ({
                 <button
                   key={mood}
                   type="button"
-                  onClick={() => setSentiment(mood)}
+                  onClick={() => updateSentiment(mood)}
+                  title={`Switch Avatar Expression to ${mood}`}
                   className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg text-[10px] font-medium capitalize transition-all border ${
                     isSelected
-                      ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 shadow-sm shadow-cyan-500/10'
+                      ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 shadow-sm shadow-cyan-500/10 scale-105'
                       : 'bg-slate-900/60 hover:bg-slate-800 text-slate-400 border-slate-800/80 hover:text-slate-200'
                   }`}
                 >
