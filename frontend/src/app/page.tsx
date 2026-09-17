@@ -360,11 +360,21 @@ export default function Home() {
         }
 
         const utterance = new SpeechSynthesisUtterance(textToSpeak);
-        utterance.rate = playbackSpeed === 0.5 ? 0.85 : playbackSpeed === 2 ? 1.25 : 1.0;
-        utterance.pitch = 1.0;
+        utterance.rate = playbackSpeed === 0.5 ? 0.9 : playbackSpeed === 2 ? 1.25 : 1.05;
+        utterance.pitch = 1.05;
 
         const voices = window.speechSynthesis.getVoices();
         const chosenVoice =
+          voices.find(
+            (v) =>
+              v.lang === 'en-IN' ||
+              v.lang.startsWith('en_IN') ||
+              v.lang.startsWith('en-IN') ||
+              v.name.includes('India') ||
+              v.name.includes('Heera') ||
+              v.name.includes('Neerja') ||
+              v.name.includes('Veena')
+          ) ||
           voices.find(
             (v) =>
               v.lang.startsWith('en') &&
@@ -372,10 +382,10 @@ export default function Home() {
                 v.name.includes('Jenny') ||
                 v.name.includes('Zira') ||
                 v.name.includes('Samantha') ||
-                v.name.includes('Google') ||
-                v.name.includes('David') ||
-                v.name.includes('Aria'))
-          ) || voices[0];
+                v.name.includes('Aria') ||
+                v.name.includes('Google'))
+          ) ||
+          voices[0];
         if (chosenVoice) utterance.voice = chosenVoice;
 
         utterance.onboundary = (ev) => {
@@ -890,17 +900,17 @@ export default function Home() {
               />
             </div>
 
-            {/* Permanent ElevenLabs Voice Badge */}
+            {/* Permanent Riya Rao ElevenLabs Voice Badge */}
             {isTtsEnabled && (
               <div
                 className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900/90 border border-cyan-500/30 text-[11px] text-cyan-300 font-mono shadow-sm"
-                title="Professor Ada ElevenLabs Neural Voice (ID: ZBagl2bR5Xv44f5Xpxn6)"
+                title="Voice: Riya Rao — Engaging & Encouraging Tutor (ElevenLabs ID: ZBagl2bR5Xv44f5Xpxn6)"
               >
                 <Volume2 className="w-3.5 h-3.5 text-cyan-400" />
                 <span className="hidden sm:inline text-slate-400">Voice:</span>
-                <span className="font-semibold text-cyan-200">ElevenLabs</span>
-                <span className="text-[10px] text-cyan-500/80 hidden md:inline font-mono">
-                  (ZBagl2bR5Xv44f5Xpxn6)
+                <span className="font-semibold text-cyan-200">Riya Rao</span>
+                <span className="text-[10px] text-cyan-500/80 font-mono">
+                  (ElevenLabs · ZBagl2bR5Xv44f5Xpxn6)
                 </span>
               </div>
             )}
