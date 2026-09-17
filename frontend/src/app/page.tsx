@@ -1320,18 +1320,14 @@ export default function Home() {
               />
             </div>
 
-            {/* Permanent Riya Rao ElevenLabs Voice Badge */}
+            {/* Teaching Assistant Ada Voice Badge */}
             {isTtsEnabled && (
               <div
                 className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900/90 border border-cyan-500/30 text-[11px] text-cyan-300 font-mono shadow-sm"
-                title="Voice: Riya Rao — Engaging & Encouraging Tutor (ElevenLabs ID: ZBagl2bR5Xv44f5Xpxn6)"
+                title="Teaching Assistant Ada"
               >
                 <Volume2 className="w-3.5 h-3.5 text-cyan-400" />
-                <span className="hidden sm:inline text-slate-400">Voice:</span>
-                <span className="font-semibold text-cyan-200">Riya Rao</span>
-                <span className="text-[10px] text-cyan-500/80 font-mono">
-                  (ElevenLabs · ZBagl2bR5Xv44f5Xpxn6)
-                </span>
+                <span className="font-semibold text-cyan-200">Teaching Assistant Ada</span>
               </div>
             )}
 
