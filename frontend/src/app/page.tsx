@@ -697,7 +697,9 @@ export default function Home() {
   }, [allTopics, selectedTopicId]);
 
   // Code Lab View Mode: Single Tab vs Split View
-  const [activeTab, setActiveTab] = useState<'code' | 'visualization' | 'complexity'>('code');
+  const [activeTab, setActiveTab] = useState<'code' | 'explainer' | 'visualization' | 'complexity'>(
+    'code'
+  );
   const [isSplitView, setIsSplitView] = useState<boolean>(false);
   const [splitRatio, setSplitRatio] = useState<number>(50); // percentage for code in split view
   const [codeLang, setCodeLang] = useState<'python' | 'cpp' | 'java'>('python');
@@ -1735,6 +1737,21 @@ export default function Home() {
 
                     <button
                       onClick={() => {
+                        setActiveTab('explainer');
+                        setIsSplitView(false);
+                      }}
+                      className={`px-3 py-1 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all ${
+                        !isSplitView && activeTab === 'explainer'
+                          ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                          : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                      }`}
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>Code Explainer</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
                         setActiveTab('visualization');
                         setIsSplitView(false);
                       }}
@@ -1811,6 +1828,17 @@ export default function Home() {
 
                             <div className="flex items-center gap-2">
                               <button
+                                onClick={() => {
+                                  setActiveTab('explainer');
+                                  setIsSplitView(false);
+                                }}
+                                className="px-2.5 py-1 rounded bg-cyan-950/60 hover:bg-cyan-900/60 text-cyan-300 border border-cyan-500/40 text-[11px] font-semibold flex items-center gap-1.5 transition-all shadow-sm group"
+                                title="Open Line-by-Line Code Explainer & Audio Lecture"
+                              >
+                                <Sparkles className="w-3 h-3 text-cyan-400 group-hover:rotate-12 transition-transform" />
+                                <span>Explain Code</span>
+                              </button>
+                              <button
                                 onClick={handleCopyCode}
                                 className="px-2.5 py-1 rounded bg-slate-800/80 hover:bg-slate-700 text-slate-300 text-[11px] flex items-center gap-1 transition-all"
                               >
@@ -1855,6 +1883,18 @@ export default function Home() {
                         </div>
                       )}
 
+                      {activeTab === 'explainer' && (
+                        <CodeExplainerSection
+                          topic={selectedTopic}
+                          codeLang={codeLang}
+                          setCodeLang={setCodeLang}
+                          code={codeText}
+                          isSpeaking={isSpeaking}
+                          speakText={speakText}
+                          setSentiment={setSentiment}
+                        />
+                      )}
+
                       {activeTab === 'visualization' && (
                         <AlgorithmVisualizerSection
                           topic={selectedTopic}
@@ -1887,6 +1927,17 @@ export default function Home() {
                               {codeLang === 'cpp' ? 'C++' : codeLang} Solution
                             </span>
                             <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => {
+                                  setIsSplitView(false);
+                                  setActiveTab('explainer');
+                                }}
+                                className="px-2 py-0.5 rounded bg-cyan-950/60 hover:bg-cyan-900/60 text-cyan-300 border border-cyan-500/30 text-[10px] font-semibold flex items-center gap-1 transition-all"
+                                title="Open Code Explainer"
+                              >
+                                <Sparkles className="w-2.5 h-2.5 text-cyan-400" />
+                                <span>Explain</span>
+                              </button>
                               <button
                                 onClick={handleCopyCode}
                                 className="p-1 text-slate-400 hover:text-slate-200"
@@ -2598,6 +2649,1003 @@ function AlgorithmVisualizerSection({
               <span>Explain</span>
             </button>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// CODE EXPLAINER DATA MODEL & GENERATOR
+// ============================================================================
+export interface CodeExplainerBlock {
+  id: string;
+  lineNumberLabel: string;
+  lines: number[];
+  codeSnippet: string;
+  roleTag: string;
+  tagColor: 'blue' | 'purple' | 'cyan' | 'emerald' | 'amber' | 'rose' | 'teal';
+  title: string;
+  explanation: string;
+  complexityImpact: string;
+  spokenLecture: string;
+}
+
+const TAG_COLOR_MAP: Record<string, { bg: string; text: string; border: string }> = {
+  blue: { bg: 'bg-blue-500/15', text: 'text-blue-300', border: 'border-blue-500/40' },
+  purple: { bg: 'bg-purple-500/15', text: 'text-purple-300', border: 'border-purple-500/40' },
+  cyan: { bg: 'bg-cyan-500/15', text: 'text-cyan-300', border: 'border-cyan-500/40' },
+  emerald: { bg: 'bg-emerald-500/15', text: 'text-emerald-300', border: 'border-emerald-500/40' },
+  amber: { bg: 'bg-amber-500/15', text: 'text-amber-300', border: 'border-amber-500/40' },
+  rose: { bg: 'bg-rose-500/15', text: 'text-rose-300', border: 'border-rose-500/40' },
+  teal: { bg: 'bg-teal-500/15', text: 'text-teal-300', border: 'border-teal-500/40' },
+};
+
+function generateCodeExplanation(
+  topic: TopicItem,
+  lang: 'python' | 'cpp' | 'java',
+  rawCode: string
+): CodeExplainerBlock[] {
+  const normId = (topic.id || '').toLowerCase();
+  const normTitle = (topic.title || '').toLowerCase();
+  const tc = getTc(topic);
+  const sc = getSc(topic);
+  const cleanTitle = toTitleCase(topic.title);
+
+  // 1. TWO SUM SPECIFIC CURATION
+  if (normId.includes('two-sum') || normTitle.includes('two sum')) {
+    if (lang === 'python') {
+      return [
+        {
+          id: 'ts-py-1',
+          lineNumberLabel: 'Line 1',
+          lines: [1],
+          codeSnippet: 'def two_sum(nums, target):',
+          roleTag: 'Function Signature',
+          tagColor: 'blue',
+          title: 'Entry Point & Parameter Binding',
+          explanation:
+            'Declares the function taking an array of integers nums and target sum target. We seek two distinct indices whose values sum to target.',
+          complexityImpact: 'O(1) Space Bound',
+          spokenLecture: 'We define two sum taking the array nums and the integer target value.',
+        },
+        {
+          id: 'ts-py-2',
+          lineNumberLabel: 'Line 2',
+          lines: [2],
+          codeSnippet: '    seen = {}',
+          roleTag: 'Hash Map Allocation',
+          tagColor: 'purple',
+          title: 'Constant-Time Hash Map Allocation',
+          explanation:
+            'Initializes an empty dictionary seen to store each visited number as key and its array index as value. This enables amortized O(1) complement lookup, avoiding an O(n^2) nested search.',
+          complexityImpact: 'O(n) Space Invariant',
+          spokenLecture:
+            'Line two initializes an empty hash map called seen. This will store each visited number and its index, providing instant constant time lookup.',
+        },
+        {
+          id: 'ts-py-3',
+          lineNumberLabel: 'Line 3',
+          lines: [3],
+          codeSnippet: '    for i, num in enumerate(nums):',
+          roleTag: 'Linear Traversal',
+          tagColor: 'cyan',
+          title: 'Single-Pass Linear Array Scan',
+          explanation:
+            'Iterates through nums with index i and element num. Traversing in a single forward pass ensures optimal O(n) total runtime.',
+          complexityImpact: 'O(n) Time Bound',
+          spokenLecture:
+            'In line three, we traverse through the array in a single linear pass using enumerate to track both the current element and its index.',
+        },
+        {
+          id: 'ts-py-4',
+          lineNumberLabel: 'Line 4',
+          lines: [4],
+          codeSnippet: '        diff = target - num',
+          roleTag: 'Complement Math',
+          tagColor: 'amber',
+          title: 'Target Complement Calculation',
+          explanation:
+            'Computes the exact complement diff = target - num needed to reach target. If this difference was previously seen, we have discovered the solution pair.',
+          complexityImpact: 'O(1) Arithmetic',
+          spokenLecture:
+            'Line four calculates diff as target minus current number. This is the exact complement we need to complete the sum.',
+        },
+        {
+          id: 'ts-py-5',
+          lineNumberLabel: 'Lines 5-6',
+          lines: [5, 6],
+          codeSnippet: '        if diff in seen:\n            return [seen[diff], i]',
+          roleTag: 'Match & Early Return',
+          tagColor: 'emerald',
+          title: 'O(1) Verification & Solution Return',
+          explanation:
+            'Performs an amortized O(1) lookup for diff in seen. When found, immediately returns the stored index seen[diff] and current index i.',
+          complexityImpact: 'O(1) Map Lookup',
+          spokenLecture:
+            'Lines five and six check whether the complement already exists in our seen table. If it does, we immediately return both indices!',
+        },
+        {
+          id: 'ts-py-6',
+          lineNumberLabel: 'Line 7',
+          lines: [7],
+          codeSnippet: '        seen[num] = i',
+          roleTag: 'State Caching',
+          tagColor: 'teal',
+          title: 'Record Visited Element into Map',
+          explanation:
+            'If the complement is not yet found, records current num and index i into seen so subsequent elements can match against it.',
+          complexityImpact: 'O(1) Hash Insert',
+          spokenLecture:
+            'Line seven records the current element and its index into seen, making it available as a complement for future numbers.',
+        },
+        {
+          id: 'ts-py-7',
+          lineNumberLabel: 'Line 8',
+          lines: [8],
+          codeSnippet: '    return []',
+          roleTag: 'Fallback Sentinel',
+          tagColor: 'rose',
+          title: 'No-Pair Fallback Sentinel',
+          explanation:
+            'Returns an empty list as a defensive sentinel if no two numbers sum to target after the full scan.',
+          complexityImpact: 'O(1) Exit',
+          spokenLecture:
+            'Finally in line eight, if no pair satisfies the sum after scanning all numbers, we return an empty list.',
+        },
+      ];
+    } else if (lang === 'cpp') {
+      return [
+        {
+          id: 'ts-cpp-1',
+          lineNumberLabel: 'Lines 1-3',
+          lines: [1, 2, 3],
+          codeSnippet: '#include <vector>\n#include <unordered_map>\nusing namespace std;',
+          roleTag: 'Header Inclusions',
+          tagColor: 'blue',
+          title: 'Standard Library Containers',
+          explanation:
+            'Includes std::vector for dynamic arrays and std::unordered_map for hash table lookups with average O(1) complexity.',
+          complexityImpact: 'Compile-Time Header',
+          spokenLecture:
+            'We include the vector and unordered map headers from the C++ standard library.',
+        },
+        {
+          id: 'ts-cpp-2',
+          lineNumberLabel: 'Line 5',
+          lines: [5],
+          codeSnippet: 'vector<int> twoSum(vector<int>& nums, int target) {',
+          roleTag: 'Function Signature',
+          tagColor: 'blue',
+          title: 'Function Definition & Pass-By-Reference',
+          explanation:
+            'Defines twoSum accepting nums by reference (vector<int>&) to avoid an expensive O(n) array copy.',
+          complexityImpact: 'O(1) Memory Pass',
+          spokenLecture:
+            'We define twoSum passing the vector by reference to avoid copying overhead.',
+        },
+        {
+          id: 'ts-cpp-3',
+          lineNumberLabel: 'Line 6',
+          lines: [6],
+          codeSnippet: '    unordered_map<int, int> seen;',
+          roleTag: 'Hash Map Allocation',
+          tagColor: 'purple',
+          title: 'O(1) Unordered Map Instantiation',
+          explanation:
+            'Instantiates an unordered_map hashing integers to their corresponding array indices with O(1) average lookup and insertion.',
+          complexityImpact: 'O(n) Space Invariant',
+          spokenLecture:
+            'Line six instantiates an unordered map seen to store visited values and their indices.',
+        },
+        {
+          id: 'ts-cpp-4',
+          lineNumberLabel: 'Line 7',
+          lines: [7],
+          codeSnippet: '    for (int i = 0; i < nums.size(); i++) {',
+          roleTag: 'Linear Traversal',
+          tagColor: 'cyan',
+          title: 'Single-Pass For Loop with Index',
+          explanation: 'Traverses each index i from 0 up to nums.size() - 1 in linear time.',
+          complexityImpact: 'O(n) Iterations',
+          spokenLecture:
+            'Line seven loops across every index of the vector in a single linear pass.',
+        },
+        {
+          id: 'ts-cpp-5',
+          lineNumberLabel: 'Line 8',
+          lines: [8],
+          codeSnippet: '        int diff = target - nums[i];',
+          roleTag: 'Complement Math',
+          tagColor: 'amber',
+          title: 'Calculate Arithmetic Difference',
+          explanation:
+            'Calculates diff = target - nums[i], the exact complement required to reach the target sum.',
+          complexityImpact: 'O(1) Arithmetic',
+          spokenLecture:
+            'Line eight computes the required complement diff as target minus nums at index i.',
+        },
+        {
+          id: 'ts-cpp-6',
+          lineNumberLabel: 'Line 9',
+          lines: [9],
+          codeSnippet: '        if (seen.count(diff)) return {seen[diff], i};',
+          roleTag: 'Match & Early Return',
+          tagColor: 'emerald',
+          title: 'O(1) Map Lookup & Vector Return',
+          explanation:
+            'seen.count(diff) performs an amortized O(1) hash table lookup. If found, returns {seen[diff], i} immediately.',
+          complexityImpact: 'O(1) Map Lookup',
+          spokenLecture:
+            'Line nine checks if seen contains the complement. If yes, it immediately returns both indices.',
+        },
+        {
+          id: 'ts-cpp-7',
+          lineNumberLabel: 'Line 10',
+          lines: [10],
+          codeSnippet: '        seen[nums[i]] = i;',
+          roleTag: 'State Caching',
+          tagColor: 'teal',
+          title: 'Hash Map Key-Value Store',
+          explanation: 'Inserts key nums[i] with value i into the map for future lookups.',
+          complexityImpact: 'O(1) Hash Insertion',
+          spokenLecture:
+            'Line ten stores the current number and index in seen for subsequent iterations.',
+        },
+        {
+          id: 'ts-cpp-8',
+          lineNumberLabel: 'Line 12',
+          lines: [12],
+          codeSnippet: '    return {};',
+          roleTag: 'Fallback Sentinel',
+          tagColor: 'rose',
+          title: 'Empty Vector Fallback',
+          explanation: 'Returns an empty vector {} if no matching pair exists.',
+          complexityImpact: 'O(1) Exit',
+          spokenLecture: 'Line twelve returns an empty vector if no pair sums to target.',
+        },
+      ];
+    } else {
+      // Java
+      return [
+        {
+          id: 'ts-java-1',
+          lineNumberLabel: 'Lines 1-2',
+          lines: [1, 2],
+          codeSnippet: 'import java.util.*;\npublic class TwoSum {',
+          roleTag: 'Class Definition',
+          tagColor: 'blue',
+          title: 'Package Imports & Class Declaration',
+          explanation:
+            'Imports Java utilities (Map, HashMap) and defines the public class container.',
+          complexityImpact: 'Standard Java Boilerplate',
+          spokenLecture: 'We import Java collections and declare the TwoSum class.',
+        },
+        {
+          id: 'ts-java-2',
+          lineNumberLabel: 'Line 3',
+          lines: [3],
+          codeSnippet: '    public static int[] twoSum(int[] nums, int target) {',
+          roleTag: 'Function Signature',
+          tagColor: 'blue',
+          title: 'Method Signature with Return Array',
+          explanation:
+            'Static method returning an array of two integers representing the solution indices.',
+          complexityImpact: 'O(1) Space',
+          spokenLecture:
+            'Line three declares the static twoSum method returning an array of integer indices.',
+        },
+        {
+          id: 'ts-java-3',
+          lineNumberLabel: 'Line 4',
+          lines: [4],
+          codeSnippet: '        Map<Integer, Integer> seen = new HashMap<>();',
+          roleTag: 'Hash Map Allocation',
+          tagColor: 'purple',
+          title: 'Java HashMap Instantiation',
+          explanation:
+            'Allocates a HashMap<Integer, Integer> with O(1) average lookup and insertion overhead.',
+          complexityImpact: 'O(n) Space Invariant',
+          spokenLecture:
+            'Line four instantiates a HashMap seen to record visited elements and their positions.',
+        },
+        {
+          id: 'ts-java-4',
+          lineNumberLabel: 'Line 5',
+          lines: [5],
+          codeSnippet: '        for (int i = 0; i < nums.length; i++) {',
+          roleTag: 'Linear Traversal',
+          tagColor: 'cyan',
+          title: 'Array Iteration Loop',
+          explanation: 'Iterates through the primitive array from index 0 to nums.length - 1.',
+          complexityImpact: 'O(n) Time Bound',
+          spokenLecture: 'Line five iterates through each element of the nums array.',
+        },
+        {
+          id: 'ts-java-5',
+          lineNumberLabel: 'Line 6',
+          lines: [6],
+          codeSnippet: '            int diff = target - nums[i];',
+          roleTag: 'Complement Math',
+          tagColor: 'amber',
+          title: 'Calculate Complement Target',
+          explanation: 'Calculates diff = target - nums[i], the required partner summand.',
+          complexityImpact: 'O(1) Arithmetic',
+          spokenLecture:
+            'Line six calculates the complement diff by subtracting the current element from target.',
+        },
+        {
+          id: 'ts-java-6',
+          lineNumberLabel: 'Line 7',
+          lines: [7],
+          codeSnippet:
+            '            if (seen.containsKey(diff)) return new int[]{seen.get(diff), i};',
+          roleTag: 'Match & Early Return',
+          tagColor: 'emerald',
+          title: 'O(1) Lookup & Array Instantiation',
+          explanation:
+            'seen.containsKey(diff) checks presence in O(1) time and returns new int[]{seen.get(diff), i} immediately.',
+          complexityImpact: 'O(1) Hash Lookup',
+          spokenLecture:
+            'Line seven checks containsKey. If found, it creates and returns an integer array with both indices.',
+        },
+        {
+          id: 'ts-java-7',
+          lineNumberLabel: 'Line 8',
+          lines: [8],
+          codeSnippet: '            seen.put(nums[i], i);',
+          roleTag: 'State Caching',
+          tagColor: 'teal',
+          title: 'Cache Index in Map',
+          explanation: 'Inserts key nums[i] and index i into the map via seen.put().',
+          complexityImpact: 'O(1) Put Operation',
+          spokenLecture:
+            'Line eight puts the visited number and its index into the map for later elements.',
+        },
+        {
+          id: 'ts-java-8',
+          lineNumberLabel: 'Line 10',
+          lines: [10],
+          codeSnippet: '        return new int[]{};',
+          roleTag: 'Fallback Sentinel',
+          tagColor: 'rose',
+          title: 'Empty Array Return',
+          explanation: 'Returns an empty integer array if no two elements satisfy the sum.',
+          complexityImpact: 'O(1) Exit',
+          spokenLecture: 'Line ten returns an empty array if no solution exists.',
+        },
+      ];
+    }
+  }
+
+  // 2. UNIVERSAL SYNTACTIC BLOCK PARSER FOR ALL 175+ TOPICS
+  const rawLines = rawCode.split('\n');
+  const blocks: CodeExplainerBlock[] = [];
+
+  let i = 0;
+  while (i < rawLines.length) {
+    const line = rawLines[i];
+    const trimmed = line.trim();
+    const lineNum = i + 1;
+
+    if (!trimmed) {
+      i++;
+      continue;
+    }
+
+    // Module imports or includes
+    if (
+      trimmed.startsWith('import ') ||
+      trimmed.startsWith('#include') ||
+      trimmed.startsWith('using namespace')
+    ) {
+      const startLine = lineNum;
+      const groupLines = [startLine];
+      let snippet = line;
+      while (
+        i + 1 < rawLines.length &&
+        (rawLines[i + 1].trim().startsWith('import ') ||
+          rawLines[i + 1].trim().startsWith('#include') ||
+          rawLines[i + 1].trim().startsWith('using namespace'))
+      ) {
+        i++;
+        groupLines.push(i + 1);
+        snippet += '\n' + rawLines[i];
+      }
+      blocks.push({
+        id: `blk-${startLine}`,
+        lineNumberLabel:
+          groupLines.length === 1
+            ? `Line ${startLine}`
+            : `Lines ${startLine}-${groupLines[groupLines.length - 1]}`,
+        lines: groupLines,
+        codeSnippet: snippet,
+        roleTag: 'Library Inclusions',
+        tagColor: 'blue',
+        title: 'Module & Header Declarations',
+        explanation: `Imports foundational data structures and standard utilities required for ${cleanTitle}.`,
+        complexityImpact: 'Compile-Time Header',
+        spokenLecture:
+          'We start by importing the necessary standard libraries and data structures.',
+      });
+      i++;
+      continue;
+    }
+
+    // Function signature or class declaration
+    if (
+      trimmed.startsWith('def ') ||
+      trimmed.startsWith('class ') ||
+      trimmed.startsWith('public class ') ||
+      trimmed.includes(' twoSum(') ||
+      trimmed.includes(' binarySearch(') ||
+      (trimmed.includes('(') &&
+        trimmed.endsWith('{') &&
+        !trimmed.startsWith('if') &&
+        !trimmed.startsWith('for') &&
+        !trimmed.startsWith('while'))
+    ) {
+      blocks.push({
+        id: `blk-${lineNum}`,
+        lineNumberLabel: `Line ${lineNum}`,
+        lines: [lineNum],
+        codeSnippet: line,
+        roleTag: trimmed.startsWith('class') ? 'Class Definition' : 'Function Signature',
+        tagColor: 'blue',
+        title: trimmed.startsWith('class') ? 'Class Declaration' : 'Function Interface & Contract',
+        explanation: `Establishes the algorithmic signature for ${cleanTitle}, binding input parameters and formal types.`,
+        complexityImpact: 'O(1) Entry',
+        spokenLecture: `Here we define the function interface for ${cleanTitle}, accepting input arguments.`,
+      });
+      i++;
+      continue;
+    }
+
+    // Loop traversals
+    if (
+      trimmed.startsWith('for ') ||
+      trimmed.startsWith('for(') ||
+      trimmed.startsWith('while ') ||
+      trimmed.startsWith('while(')
+    ) {
+      blocks.push({
+        id: `blk-${lineNum}`,
+        lineNumberLabel: `Line ${lineNum}`,
+        lines: [lineNum],
+        codeSnippet: line,
+        roleTag: 'Iterative Traversal',
+        tagColor: 'cyan',
+        title: 'Loop Traversal & Invariant Guard',
+        explanation: `Controls iteration across the dataset. Advances pointers or indices while maintaining the running state invariant bounded by ${tc}.`,
+        complexityImpact: `${tc} Traversal Bound`,
+        spokenLecture: `Line ${lineNum} initiates the loop traversal, processing elements while preserving our invariant.`,
+      });
+      i++;
+      continue;
+    }
+
+    // Conditionals and early returns
+    if (
+      trimmed.startsWith('if ') ||
+      trimmed.startsWith('if(') ||
+      trimmed.startsWith('elif ') ||
+      trimmed.startsWith('else if') ||
+      trimmed.startsWith('else:') ||
+      trimmed.startsWith('else {') ||
+      trimmed === 'else'
+    ) {
+      const isReturn = trimmed.includes('return');
+      blocks.push({
+        id: `blk-${lineNum}`,
+        lineNumberLabel: `Line ${lineNum}`,
+        lines: [lineNum],
+        codeSnippet: line,
+        roleTag: isReturn ? 'Invariant Match & Return' : 'Branch Condition',
+        tagColor: isReturn ? 'emerald' : 'amber',
+        title: isReturn ? 'Invariant Check & Early Termination' : 'Invariant Evaluation Branch',
+        explanation: isReturn
+          ? `Evaluates condition: when verified, immediately returns optimal result in O(1) time.`
+          : `Evaluates conditional invariant to prune branch or direct algorithm control flow.`,
+        complexityImpact: isReturn ? 'O(1) Verified Exit' : 'O(1) Branch Evaluation',
+        spokenLecture: isReturn
+          ? `Line ${lineNum} verifies our invariant condition. When true, it immediately returns the solution!`
+          : `Line ${lineNum} tests our condition to decide the next algorithmic transition.`,
+      });
+      i++;
+      continue;
+    }
+
+    // Return statements
+    if (trimmed.startsWith('return ') || trimmed.startsWith('return;') || trimmed === 'return') {
+      blocks.push({
+        id: `blk-${lineNum}`,
+        lineNumberLabel: `Line ${lineNum}`,
+        lines: [lineNum],
+        codeSnippet: line,
+        roleTag: 'Result Finalization',
+        tagColor: 'emerald',
+        title: 'Algorithm Termination & Return Value',
+        explanation: `Returns computed output with overall time complexity ${tc} and auxiliary space ${sc}.`,
+        complexityImpact: `${tc} Time / ${sc} Space`,
+        spokenLecture: `Line ${lineNum} finalizes computation and returns the optimal result.`,
+      });
+      i++;
+      continue;
+    }
+
+    // Data structure allocations
+    if (
+      trimmed.includes(' = {}') ||
+      trimmed.includes(' = []') ||
+      trimmed.includes('new HashMap') ||
+      trimmed.includes('new HashSet') ||
+      trimmed.includes('unordered_map') ||
+      trimmed.includes('unordered_set') ||
+      trimmed.includes('vector<') ||
+      trimmed.includes('stack<') ||
+      trimmed.includes('queue<')
+    ) {
+      blocks.push({
+        id: `blk-${lineNum}`,
+        lineNumberLabel: `Line ${lineNum}`,
+        lines: [lineNum],
+        codeSnippet: line,
+        roleTag: 'Data Structure Allocation',
+        tagColor: 'purple',
+        title: 'Memory & State Initialization',
+        explanation: `Allocates dynamic data structure to track visited elements or state invariants with spatial bound ${sc}.`,
+        complexityImpact: `${sc} Memory Overhead`,
+        spokenLecture: `Line ${lineNum} allocates our tracking data structure in memory to record state with space ${sc}.`,
+      });
+      i++;
+      continue;
+    }
+
+    // State mutations / assignments
+    if (
+      trimmed.includes('=') ||
+      trimmed.includes('++') ||
+      trimmed.includes('--') ||
+      trimmed.includes('.push') ||
+      trimmed.includes('.append') ||
+      trimmed.includes('.add')
+    ) {
+      blocks.push({
+        id: `blk-${lineNum}`,
+        lineNumberLabel: `Line ${lineNum}`,
+        lines: [lineNum],
+        codeSnippet: line,
+        roleTag: 'State Transition',
+        tagColor: 'teal',
+        title: 'Variable Mutation & Invariant Update',
+        explanation: `Updates running state variable, adjusting pointers or caching updated bounds.`,
+        complexityImpact: 'O(1) Variable Mutation',
+        spokenLecture: `Line ${lineNum} updates the algorithm's running state variables.`,
+      });
+      i++;
+      continue;
+    }
+
+    // General algorithmic statement
+    blocks.push({
+      id: `blk-${lineNum}`,
+      lineNumberLabel: `Line ${lineNum}`,
+      lines: [lineNum],
+      codeSnippet: line,
+      roleTag: 'Algorithmic Statement',
+      tagColor: 'purple',
+      title: 'Execution Step',
+      explanation: `Executes core computational logic for ${cleanTitle}.`,
+      complexityImpact: 'O(1) Step',
+      spokenLecture: `Line ${lineNum} executes this algorithmic step.`,
+    });
+    i++;
+  }
+
+  if (blocks.length === 0) {
+    blocks.push({
+      id: 'blk-fallback',
+      lineNumberLabel: 'Lines 1-N',
+      lines: [1],
+      codeSnippet: rawCode,
+      roleTag: 'Algorithm Implementation',
+      tagColor: 'cyan',
+      title: `${cleanTitle} Overview`,
+      explanation: `Complete solution implementation for ${cleanTitle} with time complexity ${tc} and space complexity ${sc}.`,
+      complexityImpact: `${tc} Time / ${sc} Space`,
+      spokenLecture: `Here is the complete implementation of ${cleanTitle} achieving optimal time ${tc} and space ${sc}.`,
+    });
+  }
+
+  return blocks;
+}
+
+// ============================================================================
+// COMPONENT: CODE EXPLAINER SECTION
+// ============================================================================
+interface CodeExplainerProps {
+  topic: TopicItem;
+  codeLang: 'python' | 'cpp' | 'java';
+  setCodeLang: (lang: 'python' | 'cpp' | 'java') => void;
+  code: string;
+  isSpeaking: boolean;
+  speakText: (text: string, onEnd?: () => void) => Promise<void>;
+  setSentiment: (sentiment: Sentiment) => void;
+}
+
+function CodeExplainerSection({
+  topic,
+  codeLang,
+  setCodeLang,
+  code,
+  isSpeaking,
+  speakText,
+  setSentiment,
+}: CodeExplainerProps) {
+  const blocks = useMemo(
+    () => generateCodeExplanation(topic, codeLang, code),
+    [topic, codeLang, code]
+  );
+  const [activeBlockIdx, setActiveBlockIdx] = useState<number>(0);
+  const [isPlayingLecture, setIsPlayingLecture] = useState<boolean>(false);
+  const isPlayingLectureRef = useRef<boolean>(false);
+  const activeBlockIdxRef = useRef<number>(0);
+  const codeLines = useMemo(() => code.split('\n'), [code]);
+
+  // Sync ref when activeBlockIdx changes
+  useEffect(() => {
+    activeBlockIdxRef.current = activeBlockIdx;
+  }, [activeBlockIdx]);
+
+  // Reset when topic or code changes
+  useEffect(() => {
+    setActiveBlockIdx(0);
+    activeBlockIdxRef.current = 0;
+    isPlayingLectureRef.current = false;
+    setIsPlayingLecture(false);
+  }, [topic, codeLang, code]);
+
+  // Cleanup speech on unmount
+  useEffect(() => {
+    return () => {
+      isPlayingLectureRef.current = false;
+    };
+  }, []);
+
+  const currentBlock = blocks[activeBlockIdx] || blocks[0];
+
+  // Speak a specific block
+  const handleSpeakBlock = useCallback(
+    (idx: number, onComplete?: () => void) => {
+      const blk = blocks[idx];
+      if (!blk) return;
+      setActiveBlockIdx(idx);
+      activeBlockIdxRef.current = idx;
+
+      // Update sentiment dynamically based on the block's algorithmic role
+      if (blk.roleTag.includes('Return') || blk.roleTag.includes('Match')) {
+        setSentiment('celebrating');
+      } else if (
+        blk.roleTag.includes('Loop') ||
+        blk.roleTag.includes('Invariant') ||
+        blk.roleTag.includes('Branch')
+      ) {
+        setSentiment('thinking');
+      } else {
+        setSentiment('explaining');
+      }
+
+      speakText(blk.spokenLecture, onComplete);
+    },
+    [blocks, setSentiment, speakText]
+  );
+
+  // Play full sequential lecture
+  const startFullLecture = useCallback(() => {
+    isPlayingLectureRef.current = true;
+    setIsPlayingLecture(true);
+
+    const stepToNext = (idx: number) => {
+      if (!isPlayingLectureRef.current || idx >= blocks.length) {
+        isPlayingLectureRef.current = false;
+        setIsPlayingLecture(false);
+        setSentiment('celebrating');
+        return;
+      }
+
+      handleSpeakBlock(idx, () => {
+        if (isPlayingLectureRef.current) {
+          setTimeout(() => {
+            if (isPlayingLectureRef.current) {
+              stepToNext(idx + 1);
+            }
+          }, 600);
+        }
+      });
+    };
+
+    stepToNext(activeBlockIdxRef.current);
+  }, [blocks.length, handleSpeakBlock, setSentiment]);
+
+  // Pause lecture
+  const pauseLecture = useCallback(() => {
+    isPlayingLectureRef.current = false;
+    setIsPlayingLecture(false);
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    setSentiment('idle');
+  }, [setSentiment]);
+
+  // Step controls
+  const handlePrevBlock = useCallback(() => {
+    pauseLecture();
+    const newIdx = Math.max(0, activeBlockIdx - 1);
+    handleSpeakBlock(newIdx);
+  }, [activeBlockIdx, handleSpeakBlock, pauseLecture]);
+
+  const handleNextBlock = useCallback(() => {
+    pauseLecture();
+    const newIdx = Math.min(blocks.length - 1, activeBlockIdx + 1);
+    handleSpeakBlock(newIdx);
+  }, [activeBlockIdx, blocks.length, handleSpeakBlock, pauseLecture]);
+
+  const handleReset = useCallback(() => {
+    pauseLecture();
+    setActiveBlockIdx(0);
+    activeBlockIdxRef.current = 0;
+  }, [pauseLecture]);
+
+  // Check if a 1-based line number belongs to the active block
+  const isLineActive = (lineNum: number) => {
+    return currentBlock.lines.includes(lineNum);
+  };
+
+  // Find block corresponding to a line number
+  const handleLineClick = (lineNum: number) => {
+    pauseLecture();
+    const targetIdx = blocks.findIndex((b) => b.lines.includes(lineNum));
+    if (targetIdx !== -1) {
+      handleSpeakBlock(targetIdx);
+    }
+  };
+
+  return (
+    <div className="h-full flex flex-col rounded-2xl border border-slate-800/80 bg-[#0a0e1a] overflow-hidden shadow-xl">
+      {/* Top Header & Controls */}
+      <div className="h-12 px-4 border-b border-slate-800 flex items-center justify-between shrink-0 bg-[#090d18]">
+        {/* Left: Title & Status */}
+        <div className="flex items-center gap-2 min-w-0">
+          <Sparkles className="w-4 h-4 text-cyan-400 shrink-0" />
+          <span className="text-xs font-semibold text-slate-200 truncate">
+            Code Explainer — {toTitleCase(topic.title)}
+          </span>
+          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-950/60 text-cyan-300 border border-cyan-800/40 hidden sm:inline">
+            Step {activeBlockIdx + 1} of {blocks.length}
+          </span>
+          {isSpeaking && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 animate-pulse">
+              <Volume2 className="w-3 h-3" />
+              <span>Ada Lecturing...</span>
+            </span>
+          )}
+        </div>
+
+        {/* Right: Language Switcher & Playback Bar */}
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Language Selector */}
+          <div className="flex items-center gap-1 bg-slate-900/80 p-0.5 rounded-lg border border-slate-800">
+            {(['python', 'cpp', 'java'] as const).map((lang) => (
+              <button
+                key={lang}
+                onClick={() => setCodeLang(lang)}
+                className={`px-2 py-0.5 rounded text-[10px] font-mono capitalize transition-all ${
+                  codeLang === lang
+                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                    : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                }`}
+              >
+                {lang === 'cpp' ? 'C++' : lang}
+              </button>
+            ))}
+          </div>
+
+          {/* Stepper Buttons */}
+          <div className="flex items-center gap-1">
+            <button
+              onClick={handlePrevBlock}
+              disabled={activeBlockIdx === 0}
+              className="p-1 rounded bg-slate-800/70 hover:bg-slate-700 text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              title="Previous Line / Block"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={handleNextBlock}
+              disabled={activeBlockIdx === blocks.length - 1}
+              className="p-1 rounded bg-slate-800/70 hover:bg-slate-700 text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              title="Next Line / Block"
+            >
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={handleReset}
+              className="p-1 rounded bg-slate-800/70 hover:bg-slate-700 text-slate-400 hover:text-slate-200 transition-all"
+              title="Reset to Beginning"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {/* Walkthrough Play / Pause Button */}
+          <button
+            onClick={isPlayingLecture ? pauseLecture : startFullLecture}
+            className={`px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all shadow-md ${
+              isPlayingLecture
+                ? 'bg-amber-600 hover:bg-amber-500 text-white shadow-amber-500/20 animate-pulse'
+                : 'bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-500 hover:to-teal-500 text-white shadow-cyan-500/20'
+            }`}
+            title={isPlayingLecture ? 'Pause Walkthrough' : 'Play Full Audio Code Walkthrough'}
+          >
+            {isPlayingLecture ? (
+              <>
+                <Pause className="w-3 h-3 fill-current" />
+                <span>Pause</span>
+              </>
+            ) : (
+              <>
+                <Play className="w-3 h-3 fill-current" />
+                <span>Lecture Walkthrough</span>
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* Progress Bar */}
+      <div className="w-full bg-slate-850 h-1 shrink-0 overflow-hidden">
+        <div
+          className="bg-gradient-to-r from-cyan-500 to-teal-400 h-full transition-all duration-300"
+          style={{ width: `${((activeBlockIdx + 1) / blocks.length) * 100}%` }}
+        />
+      </div>
+
+      {/* Main Dual-Pane: Left (Syntax-annotated Code) vs Right (Explanation Cards) */}
+      <div className="flex-1 flex min-h-0 overflow-hidden">
+        {/* LEFT PANE: Full Interactive Code with Line Numbers */}
+        <div className="w-1/2 h-full flex flex-col border-r border-slate-800/80 bg-[#070a14] overflow-hidden">
+          {/* File Tab Header */}
+          <div className="h-8 px-3 border-b border-slate-800 flex items-center justify-between text-[11px] font-mono text-slate-400 bg-[#060913]">
+            <span className="flex items-center gap-1.5 text-cyan-300">
+              <Terminal className="w-3 h-3 text-cyan-400" />
+              <span>
+                solution.{codeLang === 'python' ? 'py' : codeLang === 'cpp' ? 'cpp' : 'java'}
+              </span>
+            </span>
+            <span className="text-[10px] text-slate-500">Click any line to inspect</span>
+          </div>
+
+          {/* Interactive Code Viewer */}
+          <div className="flex-1 overflow-y-auto p-2 font-mono text-xs select-text">
+            {codeLines.map((lineStr, lineIdx) => {
+              const lineNum = lineIdx + 1;
+              const active = isLineActive(lineNum);
+              return (
+                <div
+                  key={lineNum}
+                  onClick={() => handleLineClick(lineNum)}
+                  className={`flex items-start py-1 px-2 rounded cursor-pointer transition-all ${
+                    active
+                      ? 'bg-cyan-500/15 border-l-2 border-cyan-400 text-cyan-200 shadow-sm'
+                      : 'hover:bg-slate-850/50 text-slate-300'
+                  }`}
+                >
+                  {/* Line Gutter */}
+                  <span
+                    className={`w-9 shrink-0 text-right pr-3 select-none text-[11px] flex items-center justify-end gap-1 ${
+                      active ? 'text-cyan-400 font-bold' : 'text-slate-600'
+                    }`}
+                  >
+                    {active && <span className="text-[9px] text-cyan-400 animate-pulse">👉</span>}
+                    <span>{lineNum}</span>
+                  </span>
+
+                  {/* Code Line Content */}
+                  <span className="whitespace-pre flex-1 leading-relaxed">{lineStr}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* RIGHT PANE: Deep Pedagogical Explanation Cards */}
+        <div className="w-1/2 h-full flex flex-col bg-[#080d19] overflow-hidden">
+          {/* Header */}
+          <div className="h-8 px-4 border-b border-slate-800 flex items-center justify-between text-[11px] text-slate-400 bg-[#070b16]">
+            <span className="font-semibold text-slate-200 flex items-center gap-1.5">
+              <BookOpen className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Architectural Breakdown ({blocks.length} Steps)</span>
+            </span>
+            <span className="text-[10px] font-mono text-cyan-400/80">{getTc(topic)}</span>
+          </div>
+
+          {/* Scrollable Explanation Cards */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {blocks.map((block, idx) => {
+              const isActive = idx === activeBlockIdx;
+              const colors = TAG_COLOR_MAP[block.tagColor] || TAG_COLOR_MAP.cyan;
+
+              return (
+                <div
+                  key={block.id}
+                  onClick={() => {
+                    pauseLecture();
+                    handleSpeakBlock(idx);
+                  }}
+                  className={`p-4 rounded-xl border transition-all cursor-pointer ${
+                    isActive
+                      ? 'bg-slate-900/90 border-cyan-500/60 ring-2 ring-cyan-500/20 shadow-xl'
+                      : 'bg-slate-900/40 border-slate-800/70 hover:border-slate-700 hover:bg-slate-900/60'
+                  }`}
+                >
+                  {/* Card Header: Tag, Line, Complexity */}
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider ${colors.bg} ${colors.text} ${colors.border}`}
+                      >
+                        {block.roleTag}
+                      </span>
+                      <span className="text-[10px] font-mono text-slate-400 bg-slate-800 px-2 py-0.5 rounded">
+                        {block.lineNumberLabel}
+                      </span>
+                    </div>
+
+                    <span className="text-[10px] font-mono text-cyan-400 bg-cyan-950/40 border border-cyan-800/40 px-2 py-0.5 rounded">
+                      {block.complexityImpact}
+                    </span>
+                  </div>
+
+                  {/* Title */}
+                  <h4 className="text-sm font-semibold text-white mb-1.5">{block.title}</h4>
+
+                  {/* Code Snippet Box */}
+                  <div className="p-2 rounded-lg bg-[#05070e] border border-slate-800/80 font-mono text-xs text-cyan-300/90 whitespace-pre overflow-x-auto mb-2.5 leading-relaxed">
+                    {block.codeSnippet}
+                  </div>
+
+                  {/* Pedagogical Explanation Text */}
+                  <p className="text-xs text-slate-300 leading-relaxed">{block.explanation}</p>
+
+                  {/* Bottom Action: Listen to Professor Ada */}
+                  <div className="mt-3 pt-2.5 border-t border-slate-800/60 flex items-center justify-between">
+                    <span className="text-[10px] text-slate-500 italic">
+                      Click to activate & focus line
+                    </span>
+
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        pauseLecture();
+                        handleSpeakBlock(idx);
+                      }}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all ${
+                        isActive && isSpeaking
+                          ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                          : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/60'
+                      }`}
+                      title="Listen to Professor Ada speak this line's explanation"
+                    >
+                      <Volume2
+                        className={`w-3.5 h-3.5 ${isActive && isSpeaking ? 'animate-pulse text-cyan-400' : ''}`}
+                      />
+                      <span>{isActive && isSpeaking ? 'Speaking...' : 'Listen to Ada'}</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>
