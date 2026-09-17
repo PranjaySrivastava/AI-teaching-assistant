@@ -262,6 +262,420 @@ function getSc(topic?: TopicItem): string {
   return 'O(1)';
 }
 
+export interface VisualStepModel {
+  step: number;
+  action: string;
+  description: string;
+  spokenLecture: string;
+  highlightIndices?: number[];
+  pointerIndex?: number;
+  low?: number;
+  mid?: number;
+  high?: number;
+  target?: number;
+  currentVal?: number | string;
+  complement?: number;
+  hashMap?: Record<number, number>;
+  arrayState?: number[];
+  activeNode?: string;
+  swapping?: [number, number];
+  found?: boolean;
+}
+
+export interface AlgorithmVisualModel {
+  type: 'hashmap' | 'binary_search' | 'sorting' | 'tree' | 'linked_list' | 'array_general';
+  title: string;
+  target?: number;
+  initialArray?: number[];
+  steps: VisualStepModel[];
+}
+
+function getAlgorithmVisualization(topic: TopicItem): AlgorithmVisualModel {
+  const normTitle = (topic.title || '').toLowerCase();
+  const normId = (topic.id || '').toLowerCase();
+  const category = (topic.category || '').toLowerCase();
+
+  // 1. TWO SUM / HASH MAP SEARCH
+  if (normId.includes('two-sum') || normTitle.includes('two sum')) {
+    return {
+      type: 'hashmap',
+      title: 'Two Sum with O(1) Hash Map Lookup',
+      target: 9,
+      initialArray: [2, 7, 11, 15],
+      steps: [
+        {
+          step: 1,
+          action: 'Initialize Hash Map',
+          description:
+            'Target = 9, array = [2, 7, 11, 15]. Initialize an empty hash map to store visited numbers and their indices.',
+          spokenLecture:
+            'We are solving Two Sum for target nine with input array two, seven, eleven, fifteen. We initialize an empty hash map to record each visited number and its index in O of one time.',
+          pointerIndex: 0,
+          currentVal: 2,
+          target: 9,
+          complement: 7,
+          hashMap: {},
+        },
+        {
+          step: 2,
+          action: 'Inspect Index 0 (Val: 2)',
+          description:
+            'nums[0] = 2. Required complement = 9 - 2 = 7. 7 is NOT in hash map -> Record {2: 0} and advance pointer to index 1.',
+          spokenLecture:
+            'At index zero, our current value is two. The complement we need is nine minus two, which is seven. Seven is not yet in our hash map, so we record key two at index zero and move forward.',
+          pointerIndex: 0,
+          currentVal: 2,
+          target: 9,
+          complement: 7,
+          hashMap: { 2: 0 },
+        },
+        {
+          step: 3,
+          action: 'Inspect Index 1 (Val: 7) - Match Found!',
+          description:
+            'nums[1] = 7. Required complement = 9 - 7 = 2. Key 2 IS found in hash map at index 0! Pair identified: indices [0, 1].',
+          spokenLecture:
+            'At index one, our current value is seven. Nine minus seven gives two. We check the hash map, and two was previously stored at index zero! We have found the matching pair.',
+          pointerIndex: 1,
+          currentVal: 7,
+          target: 9,
+          complement: 2,
+          hashMap: { 2: 0 },
+          highlightIndices: [0, 1],
+          found: true,
+        },
+        {
+          step: 4,
+          action: 'Return Solution Indices [0, 1]',
+          description:
+            'Return indices [0, 1]. Total Time Complexity: O(n) using a single pass; Auxiliary Space: O(n) for the hash map.',
+          spokenLecture:
+            'We return indices zero and one. Using the hash map, we solved Two Sum in optimal linear O of n time, avoiding the brute force quadratic search.',
+          pointerIndex: 1,
+          currentVal: 7,
+          target: 9,
+          complement: 2,
+          hashMap: { 2: 0, 7: 1 },
+          highlightIndices: [0, 1],
+          found: true,
+        },
+      ],
+    };
+  }
+
+  // 2. BINARY SEARCH / SEARCHING
+  if (
+    category === 'binary-search' ||
+    normId.includes('binary-search') ||
+    normTitle.includes('binary search') ||
+    normTitle.includes('search insert')
+  ) {
+    const arr = [2, 5, 8, 12, 16, 23, 38, 56, 72, 91];
+    return {
+      type: 'binary_search',
+      title: 'Binary Search on Sorted Array',
+      target: 23,
+      initialArray: arr,
+      steps: [
+        {
+          step: 1,
+          action: 'Initialize Pointers & Compute Mid',
+          description:
+            'Sorted Array of 10 elements. Target = 23. Set Low = 0 (val: 2), High = 9 (val: 91). Mid = (0 + 9) / 2 = 4 (val: 16).',
+          spokenLecture:
+            'To search for target twenty-three in a sorted array, we set pointer low at index zero, high at index nine, and compute middle index four, which contains sixteen.',
+          low: 0,
+          mid: 4,
+          high: 9,
+          target: 23,
+          currentVal: 16,
+          arrayState: arr,
+        },
+        {
+          step: 2,
+          action: 'Compare Target with Mid (23 > 16)',
+          description:
+            'Target 23 > nums[mid] 16. Since array is sorted, discard left half [0..4]. Set Low = mid + 1 = 5.',
+          spokenLecture:
+            'Our target twenty-three is greater than sixteen. Because the array is strictly sorted, the target cannot exist in the left half. We prune the left half and update low to index five.',
+          low: 5,
+          mid: 4,
+          high: 9,
+          target: 23,
+          currentVal: 16,
+          arrayState: arr,
+        },
+        {
+          step: 3,
+          action: 'Recalculate Middle Pointer',
+          description:
+            'Active search range is [5..9]. Low = 5 (val: 23), High = 9 (val: 91). New Mid = (5 + 9) / 2 = 7 (val: 56).',
+          spokenLecture:
+            'Our search window is now index five through nine. Five plus nine divided by two gives middle index seven, where the value is fifty-six.',
+          low: 5,
+          mid: 7,
+          high: 9,
+          target: 23,
+          currentVal: 56,
+          arrayState: arr,
+        },
+        {
+          step: 4,
+          action: 'Compare Target with Mid (23 < 56)',
+          description:
+            'Target 23 < nums[mid] 56. Discard right half [7..9]. Set High = mid - 1 = 6.',
+          spokenLecture:
+            'Target twenty-three is less than fifty-six. We discard the right partition and update high to index six.',
+          low: 5,
+          mid: 7,
+          high: 6,
+          target: 23,
+          currentVal: 56,
+          arrayState: arr,
+        },
+        {
+          step: 5,
+          action: 'Match Found at Index 5!',
+          description:
+            'Active search range is [5..6]. Mid = (5 + 6) / 2 = 5 (val: 23). nums[mid] == 23! Target found in O(log n) time.',
+          spokenLecture:
+            'Now low is five and high is six. The new midpoint is index five, where the value is exactly twenty-three! Target found in logarithmic O of log n time.',
+          low: 5,
+          mid: 5,
+          high: 6,
+          target: 23,
+          currentVal: 23,
+          found: true,
+          highlightIndices: [5],
+          arrayState: arr,
+        },
+      ],
+    };
+  }
+
+  // 3. SORTING / QUICKSORT / MERGESORT / BUBBLESORT
+  if (category === 'sorting' || normId.includes('sort') || normTitle.includes('sort')) {
+    return {
+      type: 'sorting',
+      title: 'QuickSort Partitioning & Sorting Walkthrough',
+      initialArray: [38, 27, 43, 3, 9, 82, 10],
+      steps: [
+        {
+          step: 1,
+          action: 'Select Pivot Element',
+          description:
+            'Array: [38, 27, 43, 3, 9, 82, 10]. Select last element (10) as pivot. Elements smaller than 10 will move left.',
+          spokenLecture:
+            'For QuickSort partitioning, we select the last element, ten, as our pivot. All elements smaller than ten will move left, and larger elements will move right.',
+          arrayState: [38, 27, 43, 3, 9, 82, 10],
+          pointerIndex: 6,
+          currentVal: 10,
+        },
+        {
+          step: 2,
+          action: 'Scan & Compare Against Pivot',
+          description:
+            'Compare element 38 with pivot 10 (38 > 10). Element 38 belongs on right. Advance scanner to index 3 (val: 3).',
+          spokenLecture:
+            'We scan the array. Thirty-eight is greater than ten, so it belongs in the right partition. At index three, element three is less than or equal to ten.',
+          arrayState: [38, 27, 43, 3, 9, 82, 10],
+          highlightIndices: [0, 3],
+          currentVal: 3,
+        },
+        {
+          step: 3,
+          action: 'Swap Smaller Element Left',
+          description:
+            'Swap 38 (index 0) and 3 (index 3). Smaller element moves left: [3, 27, 43, 38, 9, 82, 10].',
+          spokenLecture:
+            'We swap thirty-eight with three to move the smaller element to the left side of the partition.',
+          arrayState: [3, 27, 43, 38, 9, 82, 10],
+          swapping: [0, 3],
+          highlightIndices: [0, 3],
+        },
+        {
+          step: 4,
+          action: 'Place Pivot into Partition Boundary',
+          description:
+            'Swap pivot 10 into sorted boundary: [3, 9, 10, 38, 27, 82, 43]. Pivot 10 is permanently sorted!',
+          spokenLecture:
+            'We place pivot ten into its final sorted position between the partitions. Ten will never need to move again.',
+          arrayState: [3, 9, 10, 38, 27, 82, 43],
+          highlightIndices: [2],
+          found: true,
+        },
+        {
+          step: 5,
+          action: 'Recursive Sort Complete',
+          description:
+            'Recursively sort left partition [3, 9] and right partition [27, 38, 43, 82]. Final array sorted in O(n log n) average time.',
+          spokenLecture:
+            'The array is partitioned around ten. We recursively sort the partitions, completing the sort in average O of n log n time.',
+          arrayState: [3, 9, 10, 27, 38, 43, 82],
+          highlightIndices: [0, 1, 2, 3, 4, 5, 6],
+          found: true,
+        },
+      ],
+    };
+  }
+
+  // 4. TREES / BST
+  if (
+    category === 'trees' ||
+    normId.includes('tree') ||
+    normTitle.includes('tree') ||
+    normTitle.includes('bst')
+  ) {
+    return {
+      type: 'tree',
+      title: 'Binary Search Tree Traversal & Search',
+      target: 40,
+      steps: [
+        {
+          step: 1,
+          action: 'Inspect Root Node (50)',
+          description:
+            'Searching for target 40 in BST. Root value is 50. Since 40 < 50, branch to left child (30).',
+          spokenLecture:
+            'We search for value forty in the Binary Search Tree. At root fifty, forty is strictly less than fifty, so according to BST invariants, we branch left.',
+          activeNode: '50',
+          currentVal: 50,
+          target: 40,
+        },
+        {
+          step: 2,
+          action: 'Inspect Left Child (30)',
+          description: 'Current node is 30. Since 40 > 30, branch to right child (40).',
+          spokenLecture:
+            'Now at node thirty, forty is greater than thirty. By BST properties, greater values reside in the right sub-tree, so we branch right.',
+          activeNode: '30',
+          currentVal: 30,
+          target: 40,
+        },
+        {
+          step: 3,
+          action: 'Target Node 40 Found!',
+          description:
+            'Current node is 40. Node value equals target! Search completed successfully in O(h) = O(log n) time.',
+          spokenLecture:
+            'Current node matches our target forty! The search terminates successfully in logarithmic O of height time.',
+          activeNode: '40',
+          currentVal: 40,
+          target: 40,
+          found: true,
+        },
+      ],
+    };
+  }
+
+  // 5. LINKED LISTS
+  if (
+    category === 'linked-list' ||
+    normId.includes('linked-list') ||
+    normTitle.includes('linked list') ||
+    normTitle.includes('reverse list')
+  ) {
+    return {
+      type: 'linked_list',
+      title: 'Linked List Reversal & Traversal',
+      steps: [
+        {
+          step: 1,
+          action: 'Initialize Pointers (prev, curr, next)',
+          description:
+            'List: 1 -> 2 -> 3 -> 4 -> 5 -> NULL. Initialize Prev = NULL, Curr = Node(1), Next = Node(2).',
+          spokenLecture:
+            'To reverse a singly linked list in linear time, we maintain three pointers: previous initialized to null, current pointing to head node one, and next pointing to node two.',
+          pointerIndex: 0,
+          currentVal: 1,
+        },
+        {
+          step: 2,
+          action: 'Reverse Pointer 1 -> Prev',
+          description:
+            'Save curr.next (2). Point Node(1).next to Prev (NULL). Advance Prev = 1, Curr = 2.',
+          spokenLecture:
+            'We store the next pointer, redirect node one next pointer backwards to previous, and advance our pointers forward.',
+          pointerIndex: 1,
+          currentVal: 2,
+        },
+        {
+          step: 3,
+          action: 'Reverse Pointer 2 -> 1',
+          description:
+            'Point Node(2).next to Node(1). List is now NULL <- 1 <- 2. Advance Prev = 2, Curr = 3.',
+          spokenLecture:
+            'Node two is now redirected backwards to node one, and we advance our pointers forward to node three.',
+          pointerIndex: 2,
+          currentVal: 3,
+        },
+        {
+          step: 4,
+          action: 'Complete In-Place Reversal',
+          description:
+            'Repeat until Curr == NULL. New head is Node(5). Reversed: 5 -> 4 -> 3 -> 2 -> 1 -> NULL.',
+          spokenLecture:
+            'We repeat this operation for all nodes until current is null. Node five is our new head. Time complexity is O of n with O of one in-place auxiliary space.',
+          pointerIndex: 4,
+          currentVal: 5,
+          found: true,
+        },
+      ],
+    };
+  }
+
+  // 6. DYNAMIC CONTEXTUAL GENERATOR FOR ALL OTHER PROBLEMS
+  const cleanTitle = toTitleCase(topic.title);
+  const tc = getTc(topic);
+  const sc = getSc(topic);
+  const summary =
+    topic.expectedAnswer?.summary || 'Optimized state transitions across the input structure.';
+
+  return {
+    type: 'array_general',
+    title: `${cleanTitle} Execution Walkthrough`,
+    initialArray: [7, 1, 5, 3, 6, 4],
+    steps: [
+      {
+        step: 1,
+        action: `Initialize ${cleanTitle} State`,
+        description: `Set up tracking variables and invariants. Target complexity: Time ${tc}, Space ${sc}.`,
+        spokenLecture: `We begin the walkthrough for ${cleanTitle}. We set up our tracking pointers and invariant state to guarantee asymptotic time complexity of ${tc}.`,
+        pointerIndex: 0,
+        currentVal: 7,
+      },
+      {
+        step: 2,
+        action: 'Scan Elements & Evaluate Condition',
+        description: `Inspect element at index 1 (val: 1). Compare with previous state and evaluate transition: ${summary.slice(0, 80)}...`,
+        spokenLecture: `At index one, we evaluate the current element and update our running invariant according to the algorithm's optimal criteria.`,
+        pointerIndex: 1,
+        currentVal: 1,
+        highlightIndices: [0, 1],
+      },
+      {
+        step: 3,
+        action: 'Update Optimal State & Bounds',
+        description: `At index 4 (val: 6), invariant condition is satisfied. Update best result and advance window.`,
+        spokenLecture: `Scanning through the elements, at index four our invariant reaches an optimal threshold. We update our result variable and continue advancing.`,
+        pointerIndex: 4,
+        currentVal: 6,
+        highlightIndices: [1, 4],
+        found: true,
+      },
+      {
+        step: 4,
+        action: 'Finalize & Return Result',
+        description: `All elements evaluated in one pass. Return computed result with optimal time ${tc} and space ${sc}.`,
+        spokenLecture: `All elements have been processed in a single pass. The algorithm returns the verified optimal result, achieving time complexity of ${tc} and space ${sc}.`,
+        pointerIndex: 5,
+        currentVal: 4,
+        found: true,
+      },
+    ],
+  };
+}
+
 interface ChatMessage {
   id: string;
   sender: 'user' | 'assistant';
@@ -502,13 +916,14 @@ export default function Home() {
     setCurrentStepIdx(0);
   }, []);
 
-  // Narrate individual step on demand
+  // Narrate individual step on demand with authentic pedagogical speech
   const handleNarrateStep = useCallback(
     (stepIdx: number) => {
-      const steps = selectedTopic.visualScript?.steps || [];
+      const vizModel = getAlgorithmVisualization(selectedTopic);
+      const steps = vizModel.steps;
       const step = steps[stepIdx];
       if (!step) return;
-      const narration = step.description || `Executing step ${stepIdx + 1}: ${step.action}.`;
+      const narration = step.spokenLecture || step.description;
       setSentiment('explaining');
       speakText(narration);
     },
@@ -540,7 +955,8 @@ export default function Home() {
   useEffect(() => {
     if (!isPlayingVis) return;
 
-    const steps = selectedTopic.visualScript?.steps || [];
+    const vizModel = getAlgorithmVisualization(selectedTopic);
+    const steps = vizModel.steps;
     if (steps.length === 0) {
       setIsPlayingVis(false);
       return;
@@ -550,30 +966,32 @@ export default function Home() {
     if (!currentStep) return;
 
     setSentiment('explaining');
-    const narration =
-      currentStep.description || `Executing step ${currentStepIdx + 1}: ${currentStep.action}.`;
+    const narration = currentStep.spokenLecture || currentStep.description;
 
     let timer: NodeJS.Timeout | null = null;
 
     speakText(narration, () => {
       // Advance to next step once Professor Ada finishes explaining
       if (isPlayingVisRef.current) {
-        timer = setTimeout(() => {
-          if (isPlayingVisRef.current) {
-            setCurrentStepIdx((prev) => {
-              if (prev >= steps.length - 1) {
-                setIsPlayingVis(false);
-                isPlayingVisRef.current = false;
-                setSentiment('celebrating');
-                speakText(
-                  `Visualization complete! That concludes all steps for ${toTitleCase(selectedTopic.title)}.`
-                );
-                return prev;
-              }
-              return prev + 1;
-            });
-          }
-        }, 800 / playbackSpeed);
+        timer = setTimeout(
+          () => {
+            if (isPlayingVisRef.current) {
+              setCurrentStepIdx((prev) => {
+                if (prev >= steps.length - 1) {
+                  setIsPlayingVis(false);
+                  isPlayingVisRef.current = false;
+                  setSentiment('celebrating');
+                  speakText(
+                    `Visualization complete! That concludes all steps for ${toTitleCase(selectedTopic.title)}.`
+                  );
+                  return prev;
+                }
+                return prev + 1;
+              });
+            }
+          },
+          Math.max(400, Math.round(800 / playbackSpeed))
+        );
       }
     });
 
@@ -1697,29 +2115,11 @@ function AlgorithmVisualizerSection({
   onNarrateStep,
   isSpeaking,
 }: VisualizerProps) {
-  const steps = topic.visualScript?.steps || [
-    {
-      action: 'Initialize',
-      description:
-        'Initialize pointers and auxiliary data structures for ' + toTitleCase(topic.title),
-    },
-    {
-      action: 'Process',
-      description: 'Iterate through elements, evaluate invariants, and transition states.',
-    },
-    {
-      action: 'Finalize',
-      description: 'Conclude execution and return verified output with optimal complexity.',
-    },
-  ];
-
+  const vizModel = useMemo(() => getAlgorithmVisualization(topic), [topic]);
+  const steps = vizModel.steps;
   const currentStep = steps[currentStepIdx] || steps[0];
   const progressPct = ((currentStepIdx + 1) / steps.length) * 100;
-  const category = topic.category;
-
-  // Mock data states for rich dynamic visualization
-  const arraySample = useMemo(() => [2, 7, 11, 15, 1, 8, 4], []);
-  const activePointer = currentStepIdx % arraySample.length;
+  const type = vizModel.type;
 
   return (
     <div className="h-full flex flex-col rounded-2xl border border-slate-800/80 bg-[#0a0e1a] overflow-hidden shadow-xl">
@@ -1728,7 +2128,7 @@ function AlgorithmVisualizerSection({
         <div className="flex items-center gap-2">
           <Eye className="w-4 h-4 text-cyan-400" />
           <span className="text-xs font-semibold text-slate-200">
-            {toTitleCase(topic.title)} — Step {currentStepIdx + 1} of {steps.length}
+            {vizModel.title} — Step {currentStepIdx + 1} of {steps.length}
           </span>
           {isSpeaking && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 animate-pulse">
@@ -1816,62 +2216,293 @@ function AlgorithmVisualizerSection({
         {/* Background Grid Pattern */}
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#1e293b10_1px,transparent_1px),linear-gradient(to_bottom,#1e293b10_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
 
-        {/* Dynamic Category-Specific Visualizer */}
-        {category === 'trees' ? (
-          // TREE GRAPH VISUALIZER
+        {/* 1. TWO SUM HASH MAP VISUALIZER */}
+        {type === 'hashmap' && (
+          <div className="flex flex-col items-center gap-6 z-10 w-full max-w-xl">
+            {/* Target and Complement Header Badges */}
+            <div className="flex items-center gap-3">
+              <div className="px-3.5 py-1.5 rounded-xl bg-cyan-950/60 border border-cyan-500/40 text-xs font-mono text-cyan-300 flex items-center gap-2 shadow-sm">
+                <span className="text-slate-400">Target Sum:</span>
+                <span className="font-bold text-white text-sm">9</span>
+              </div>
+              {currentStep.complement !== undefined && (
+                <div className="px-3.5 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs font-mono text-slate-300 flex items-center gap-2">
+                  <span className="text-slate-400">Complement:</span>
+                  <span className="text-amber-300 font-bold">
+                    9 - {currentStep.currentVal} = {currentStep.complement}
+                  </span>
+                  <span
+                    className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
+                      currentStep.found
+                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                        : 'bg-slate-800 text-slate-400'
+                    }`}
+                  >
+                    {currentStep.found ? '✓ In Map!' : 'Not In Map'}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Input Array Elements */}
+            <div className="flex items-center justify-center gap-2.5">
+              {(vizModel.initialArray || [2, 7, 11, 15]).map((num, i) => {
+                const isCurrent = i === currentStep.pointerIndex;
+                const isHighlighted = currentStep.highlightIndices?.includes(i);
+                return (
+                  <div key={i} className="flex flex-col items-center transition-all">
+                    {isCurrent ? (
+                      <span className="text-[10px] font-mono text-cyan-400 font-bold mb-1 animate-bounce">
+                        curr ↓
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-mono text-transparent mb-1">-</span>
+                    )}
+                    <div
+                      className={`w-14 h-16 rounded-2xl flex flex-col items-center justify-center border text-base font-bold shadow-xl transition-all duration-300 ${
+                        isHighlighted
+                          ? 'bg-gradient-to-b from-emerald-500 to-teal-700 border-emerald-300 text-white scale-110 shadow-emerald-500/30 ring-4 ring-emerald-500/20'
+                          : isCurrent
+                            ? 'bg-gradient-to-b from-cyan-500 to-blue-600 border-cyan-300 text-white scale-105 shadow-cyan-500/30 ring-4 ring-cyan-500/20'
+                            : 'bg-slate-850 border-slate-700/80 text-slate-200'
+                      }`}
+                    >
+                      <span>{num}</span>
+                      <span className="text-[9px] font-mono opacity-60">[{i}]</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Live Hash Map Table */}
+            <div className="w-full max-w-sm rounded-xl border border-slate-800 bg-slate-900/90 p-3 flex flex-col items-center gap-2 shadow-lg">
+              <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                <span>Hash Map State</span>
+                <span className="text-slate-600">({'{ key: value }'})</span>
+              </span>
+              <div className="flex items-center justify-center gap-2 flex-wrap min-h-[32px]">
+                {Object.keys(currentStep.hashMap || {}).length === 0 ? (
+                  <span className="text-xs font-mono text-slate-600 italic">Empty {'{ }'}</span>
+                ) : (
+                  Object.entries(currentStep.hashMap || {}).map(([k, v]) => (
+                    <div
+                      key={k}
+                      className="px-3 py-1 rounded-lg bg-cyan-950/40 border border-cyan-500/40 text-xs font-mono text-cyan-300 flex items-center gap-1.5 shadow-sm"
+                    >
+                      <span className="font-bold text-white">{k}</span>
+                      <span className="text-slate-500">→</span>
+                      <span className="text-emerald-400 font-semibold">index {v}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Solution Result Banner */}
+            {currentStep.found && (
+              <div className="px-4 py-2 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-semibold flex items-center gap-2 animate-pulse shadow-lg">
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Pair Found: nums[0] (2) + nums[1] (7) = 9 → Return [0, 1]</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 2. BINARY SEARCH VISUALIZER */}
+        {type === 'binary_search' && (
+          <div className="flex flex-col items-center gap-5 z-10 w-full max-w-2xl">
+            {/* Target and Range Badge */}
+            <div className="flex items-center gap-3">
+              <div className="px-3.5 py-1.5 rounded-xl bg-cyan-950/60 border border-cyan-500/40 text-xs font-mono text-cyan-300 flex items-center gap-2 shadow-sm">
+                <span className="text-slate-400">Target Value:</span>
+                <span className="font-bold text-white text-sm">23</span>
+              </div>
+              <div className="px-3.5 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs font-mono text-slate-300 flex items-center gap-3">
+                <span>
+                  Low: <strong className="text-cyan-400">{currentStep.low}</strong>
+                </span>
+                <span>
+                  Mid: <strong className="text-amber-400">{currentStep.mid}</strong>
+                </span>
+                <span>
+                  High: <strong className="text-cyan-400">{currentStep.high}</strong>
+                </span>
+              </div>
+            </div>
+
+            {/* Sorted Array Elements */}
+            <div className="flex items-center justify-center gap-1.5 flex-wrap">
+              {(vizModel.initialArray || [2, 5, 8, 12, 16, 23, 38, 56, 72, 91]).map((num, i) => {
+                const low = currentStep.low ?? 0;
+                const high = currentStep.high ?? 9;
+                const mid = currentStep.mid;
+                const isOutside = i < low || i > high;
+                const isMid = i === mid;
+                const isMatch = currentStep.found && isMid;
+
+                return (
+                  <div key={i} className="flex flex-col items-center transition-all">
+                    {/* Pointer Label */}
+                    <div className="h-5 flex items-center justify-center text-[10px] font-mono font-bold">
+                      {isMid ? (
+                        <span className="text-amber-400">MID</span>
+                      ) : i === low ? (
+                        <span className="text-cyan-400">L</span>
+                      ) : i === high ? (
+                        <span className="text-cyan-400">H</span>
+                      ) : (
+                        <span className="text-transparent">-</span>
+                      )}
+                    </div>
+
+                    <div
+                      className={`w-11 h-14 rounded-xl flex flex-col items-center justify-center border text-xs font-bold shadow-lg transition-all ${
+                        isMatch
+                          ? 'bg-gradient-to-b from-emerald-500 to-teal-700 border-emerald-300 text-white scale-110 ring-4 ring-emerald-500/30'
+                          : isMid
+                            ? 'bg-gradient-to-b from-amber-500 to-orange-600 border-amber-300 text-white scale-105 ring-4 ring-amber-500/20'
+                            : isOutside
+                              ? 'bg-slate-900/50 border-slate-800/50 text-slate-600 line-through opacity-40'
+                              : 'bg-slate-850 border-slate-700 text-slate-200'
+                      }`}
+                    >
+                      <span>{num}</span>
+                      <span className="text-[8px] font-mono opacity-60">[{i}]</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {currentStep.found && (
+              <div className="px-4 py-2 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-semibold flex items-center gap-2 animate-pulse shadow-lg">
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Target 23 Found at Index 5 in Logarithmic O(log n) Time!</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 3. SORTING / QUICKSORT VISUALIZER */}
+        {type === 'sorting' && (
+          <div className="flex flex-col items-center gap-5 z-10 w-full max-w-xl">
+            <div className="text-xs font-mono text-slate-400">
+              QuickSort Partitioning — Array State
+            </div>
+            <div className="flex items-end justify-center gap-2 min-h-[120px]">
+              {(currentStep.arrayState || vizModel.initialArray || [38, 27, 43, 3, 9, 82, 10]).map(
+                (num, i) => {
+                  const isPivot = i === currentStep.pointerIndex;
+                  const isHighlight = currentStep.highlightIndices?.includes(i);
+                  const isSorted = currentStep.found && (i === 2 || currentStep.step >= 4);
+
+                  return (
+                    <div key={i} className="flex flex-col items-center gap-1 transition-all">
+                      {isPivot ? (
+                        <span className="text-[10px] font-mono text-amber-400 font-bold animate-bounce">
+                          PIVOT
+                        </span>
+                      ) : isHighlight ? (
+                        <span className="text-[10px] font-mono text-cyan-400 font-bold">scan</span>
+                      ) : (
+                        <span className="text-[10px] font-mono text-transparent">-</span>
+                      )}
+                      <div
+                        style={{ height: `${Math.max(48, Math.min(100, num * 1.2))}px` }}
+                        className={`w-12 rounded-xl flex flex-col items-center justify-between py-1.5 border text-xs font-bold shadow-lg transition-all ${
+                          isSorted
+                            ? 'bg-gradient-to-b from-emerald-500 to-teal-700 border-emerald-300 text-white'
+                            : isPivot
+                              ? 'bg-gradient-to-b from-amber-500 to-orange-600 border-amber-300 text-white ring-4 ring-amber-500/30'
+                              : isHighlight
+                                ? 'bg-gradient-to-b from-cyan-500 to-blue-600 border-cyan-300 text-white scale-105'
+                                : 'bg-slate-850 border-slate-700 text-slate-200'
+                        }`}
+                      >
+                        <span>{num}</span>
+                        <span className="text-[8px] font-mono opacity-70">[{i}]</span>
+                      </div>
+                    </div>
+                  );
+                }
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* 4. TREE VISUALIZER */}
+        {type === 'tree' && (
           <div className="relative w-full max-w-md h-56 flex flex-col items-center justify-between z-10">
             {/* Root Node */}
             <div
-              className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center font-bold text-xs shadow-lg transition-all ${currentStepIdx === 0 ? 'bg-cyan-500 text-slate-950 scale-110 ring-4 ring-cyan-500/30' : 'bg-slate-800 text-slate-200 border border-slate-700'}`}
+              className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center font-bold text-xs shadow-lg transition-all ${
+                currentStep.activeNode === '50'
+                  ? 'bg-cyan-500 text-slate-950 scale-110 ring-4 ring-cyan-500/30'
+                  : 'bg-slate-800 text-slate-200 border border-slate-700'
+              }`}
             >
               50
-              <span className="text-[9px] opacity-70">Root</span>
+              <span className="text-[8px] opacity-70">Root</span>
             </div>
 
             {/* Level 1 Connectors & Children */}
             <div className="w-full flex items-center justify-around">
               <div
-                className={`w-11 h-11 rounded-2xl flex flex-col items-center justify-center font-bold text-xs shadow-lg transition-all ${currentStepIdx === 1 ? 'bg-cyan-500 text-slate-950 scale-110 ring-4 ring-cyan-500/30' : 'bg-slate-800 text-slate-200 border border-slate-700'}`}
+                className={`w-11 h-11 rounded-2xl flex flex-col items-center justify-center font-bold text-xs shadow-lg transition-all ${
+                  currentStep.activeNode === '30'
+                    ? 'bg-cyan-500 text-slate-950 scale-110 ring-4 ring-cyan-500/30'
+                    : 'bg-slate-800 text-slate-200 border border-slate-700'
+                }`}
               >
-                <span>5</span>
-                <span className="text-[9px] font-mono opacity-70">L</span>
+                <span>30</span>
+                <span className="text-[8px] font-mono opacity-70">L (&lt; 50)</span>
+              </div>
+              <div className="w-11 h-11 rounded-2xl flex flex-col items-center justify-center font-bold text-xs shadow-lg bg-slate-850 text-slate-400 border border-slate-800">
+                <span>70</span>
+                <span className="text-[8px] font-mono opacity-60">R</span>
+              </div>
+            </div>
+
+            {/* Leaves */}
+            <div className="w-full flex justify-around px-8">
+              <div className="w-9 h-9 rounded-xl bg-slate-855 border border-slate-800 flex items-center justify-center text-xs font-semibold text-slate-500">
+                20
               </div>
               <div
-                className={`w-11 h-11 rounded-2xl flex flex-col items-center justify-center font-bold text-xs shadow-lg transition-all ${currentStepIdx === 2 ? 'bg-cyan-500 text-slate-950 scale-110 ring-4 ring-cyan-500/30' : 'bg-slate-800 text-slate-200 border border-slate-700'}`}
+                className={`w-10 h-10 rounded-xl flex items-center justify-center text-xs font-bold shadow-lg transition-all ${
+                  currentStep.activeNode === '40'
+                    ? 'bg-emerald-500 text-slate-950 scale-125 ring-4 ring-emerald-500/40 shadow-emerald-500/40 animate-pulse'
+                    : 'bg-slate-850 border border-slate-700 text-slate-300'
+                }`}
               >
-                <span>15</span>
-                <span className="text-[9px] font-mono opacity-70">R</span>
+                40
               </div>
             </div>
-            {/* Leaves */}
-            <div className="w-full flex justify-between px-6">
-              {[2, 7, 12, 20].map((val, idx) => (
-                <div
-                  key={val}
-                  className="w-9 h-9 rounded-xl bg-slate-850 border border-slate-700 flex items-center justify-center text-xs font-semibold text-slate-300"
-                >
-                  {val}
-                </div>
-              ))}
-            </div>
           </div>
-        ) : category === 'linked-list' ? (
-          // LINKED LIST NODES VISUALIZER
+        )}
+
+        {/* 5. LINKED LIST VISUALIZER */}
+        {type === 'linked_list' && (
           <div className="flex items-center gap-2 z-10 overflow-x-auto p-4 max-w-full">
             {[1, 2, 3, 4, 5].map((val, idx) => {
-              const isCurrent = idx === currentStepIdx % 5;
+              const isCurrent = idx === currentStep.pointerIndex;
               return (
                 <React.Fragment key={val}>
                   <div
                     className={`flex flex-col items-center transition-all ${isCurrent ? 'scale-110' : ''}`}
                   >
                     {isCurrent && (
-                      <span className="text-[10px] font-mono text-cyan-400 font-bold mb-1">
+                      <span className="text-[10px] font-mono text-cyan-400 font-bold mb-1 animate-bounce">
                         curr ↓
                       </span>
                     )}
                     <div
-                      className={`w-14 h-14 rounded-2xl flex flex-col items-center justify-center border font-bold text-sm shadow-xl ${isCurrent ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 shadow-cyan-500/20' : 'bg-slate-850 border-slate-700 text-slate-200'}`}
+                      className={`w-14 h-14 rounded-2xl flex flex-col items-center justify-center border font-bold text-sm shadow-xl ${
+                        isCurrent
+                          ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 shadow-cyan-500/20'
+                          : 'bg-slate-850 border-slate-700 text-slate-200'
+                      }`}
                     >
                       <span>{val}</span>
                       <span className="text-[8px] font-mono text-slate-400">0x{val}0</span>
@@ -1882,13 +2513,16 @@ function AlgorithmVisualizerSection({
               );
             })}
           </div>
-        ) : (
-          // ARRAY / GENERAL ALGORITHM VISUALIZER
+        )}
+
+        {/* 6. GENERAL ARRAY VISUALIZER */}
+        {type === 'array_general' && (
           <div className="flex flex-col items-center gap-4 z-10 w-full max-w-lg">
             <div className="text-xs font-mono text-slate-400">Array In-Memory State</div>
             <div className="flex items-center justify-center gap-2 w-full">
-              {arraySample.map((num, i) => {
-                const isActive = i === activePointer;
+              {(vizModel.initialArray || [7, 1, 5, 3, 6, 4]).map((num, i) => {
+                const isActive = i === currentStep.pointerIndex;
+                const isHighlight = currentStep.highlightIndices?.includes(i);
                 return (
                   <div key={i} className="flex flex-col items-center transition-all">
                     {isActive ? (
@@ -1900,9 +2534,11 @@ function AlgorithmVisualizerSection({
                     )}
                     <div
                       className={`w-12 h-14 rounded-2xl flex flex-col items-center justify-center border text-sm font-bold shadow-xl transition-all ${
-                        isActive
-                          ? 'bg-gradient-to-b from-cyan-500 to-blue-600 border-cyan-300 text-white scale-110 shadow-cyan-500/30 ring-4 ring-cyan-500/20'
-                          : 'bg-slate-850 border-slate-700/80 text-slate-200'
+                        isHighlight
+                          ? 'bg-gradient-to-b from-emerald-500 to-teal-700 border-emerald-300 text-white scale-105'
+                          : isActive
+                            ? 'bg-gradient-to-b from-cyan-500 to-blue-600 border-cyan-300 text-white scale-110 shadow-cyan-500/30 ring-4 ring-cyan-500/20'
+                            : 'bg-slate-850 border-slate-700/80 text-slate-200'
                       }`}
                     >
                       <span>{num}</span>
@@ -1918,16 +2554,14 @@ function AlgorithmVisualizerSection({
         {/* State Variables & Invariant Inspector */}
         <div className="mt-8 px-4 py-2 rounded-xl bg-slate-900/90 border border-slate-800 flex items-center gap-4 text-xs font-mono text-slate-300 z-10 shadow-lg">
           <div>
-            <span className="text-slate-500">i:</span>{' '}
-            <span className="text-cyan-400">{activePointer}</span>
+            <span className="text-slate-500">step:</span>{' '}
+            <span className="text-cyan-400">
+              {currentStepIdx + 1}/{steps.length}
+            </span>
           </div>
           <div>
-            <span className="text-slate-500">val:</span>{' '}
-            <span className="text-emerald-400">{arraySample[activePointer]}</span>
-          </div>
-          <div>
-            <span className="text-slate-500">invariant:</span>{' '}
-            <span className="text-amber-400">true</span>
+            <span className="text-slate-500">action:</span>{' '}
+            <span className="text-emerald-400 font-semibold">{currentStep.action}</span>
           </div>
           <div>
             <span className="text-slate-500">tc:</span>{' '}
@@ -1945,7 +2579,7 @@ function AlgorithmVisualizerSection({
             </div>
             <div>
               <h4 className="text-xs font-semibold text-slate-200 uppercase tracking-wide">
-                {currentStep.action || 'Execution Invariant'}
+                {currentStep.action}
               </h4>
               <p className="text-xs text-slate-300 leading-relaxed mt-0.5">
                 {currentStep.description}
@@ -1956,7 +2590,7 @@ function AlgorithmVisualizerSection({
             <button
               onClick={() => onNarrateStep(currentStepIdx)}
               className="px-2.5 py-1.5 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-cyan-300 text-xs font-medium flex items-center gap-1.5 transition-all shrink-0"
-              title="Listen to Professor Ada explain this step"
+              title="Listen to Professor Ada explain this step out loud"
             >
               <Volume2
                 className={`w-3.5 h-3.5 ${isSpeaking ? 'animate-pulse text-cyan-400' : ''}`}
