@@ -167,34 +167,34 @@ export const AvatarSection: React.FC<AvatarSectionProps> = ({
   const color = SENTIMENT_COLORS[sentiment];
 
   return (
-    <div className="flex-1 min-h-[420px] rounded-2xl border border-slate-800 bg-gradient-to-b from-slate-900/90 to-slate-950 p-5 flex flex-col relative overflow-hidden shadow-2xl">
+    <div className="h-full min-h-[300px] rounded-2xl border border-slate-800/80 bg-gradient-to-b from-slate-900/90 to-slate-950 p-3.5 flex flex-col relative overflow-hidden shadow-2xl">
       {/* Background Cyber Ambient Light */}
       <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_50%_35%,rgba(6,182,212,0.18),transparent_70%)]" />
 
       {/* Top Status Bar */}
-      <div className="flex items-center justify-between relative z-10 mb-2">
+      <div className="flex items-center justify-between relative z-10 mb-1.5 shrink-0">
         <div className="flex items-center gap-2">
           <div className="p-1.5 rounded-lg bg-cyan-950/60 border border-cyan-800/40 text-cyan-400">
             <Bot className="w-4 h-4" />
           </div>
           <div>
-            <h2 className="text-sm font-semibold text-slate-200">Professor Ada</h2>
-            <p className="text-[11px] text-slate-400">DS&A Teaching Assistant</p>
+            <h2 className="text-xs font-semibold text-slate-200">Professor Ada</h2>
+            <p className="text-[10px] text-slate-400">DS&A AI Tutor</p>
           </div>
         </div>
 
         {/* Dynamic Sentiment Status Badge */}
         <div
-          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${color.bg} ${color.text} ${color.border} backdrop-blur-md transition-all duration-300`}
+          className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border ${color.bg} ${color.text} ${color.border} backdrop-blur-md transition-all duration-300`}
         >
-          <Icon className="w-3.5 h-3.5" />
+          <Icon className="w-3 h-3" />
           <span className="capitalize">{sentiment}</span>
           <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
         </div>
       </div>
 
       {/* 3D Three.js Avatar Viewport */}
-      <div className="flex-1 w-full min-h-[340px] relative rounded-xl overflow-hidden border border-slate-800/80 bg-gradient-to-b from-slate-900/60 via-slate-950/80 to-slate-950 my-2 shadow-2xl">
+      <div className="flex-1 w-full min-h-[180px] relative rounded-xl overflow-hidden border border-slate-800/80 bg-gradient-to-b from-slate-900/60 via-slate-950/80 to-slate-950 my-1.5 shadow-2xl">
         {/* Soft Studio Halo behind Avatar */}
         <div className="absolute top-[12%] left-1/2 -translate-x-1/2 w-64 h-64 rounded-full bg-cyan-500/10 blur-3xl pointer-events-none" />
         <div className="absolute top-[35%] left-1/2 -translate-x-1/2 w-40 h-40 rounded-full bg-blue-500/10 blur-2xl pointer-events-none" />
