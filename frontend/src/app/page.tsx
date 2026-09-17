@@ -310,6 +310,48 @@ export default function Home() {
   const [isRecording, setIsRecording] = useState<boolean>(false);
   const onWordBoundaryRef = useRef<((word: string) => void) | null>(null);
 
+  // Dynamic Voice Selection & Persona Tuning
+  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [selectedVoiceURI, setSelectedVoiceURI] = useState<string>('elevenlabs-neural');
+  const [voicePitch, setVoicePitch] = useState<number>(1.0);
+  const activeAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Load persisted voice from localStorage if present
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const saved = localStorage.getItem('ada_selected_voice');
+      if (saved) {
+        setSelectedVoiceURI(saved);
+      } else {
+        localStorage.setItem('ada_selected_voice', 'elevenlabs-neural');
+      }
+    } catch {
+      // localStorage may be disabled in private mode
+    }
+  }, []);
+
+  // Auto-discover and populate system & browser voices
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+
+    const loadVoices = () => {
+      const all = window.speechSynthesis.getVoices();
+      if (all.length === 0) return;
+      const enVoices = all.filter((v) => v.lang.startsWith('en'));
+      const list = enVoices.length > 0 ? enVoices : all;
+      setAvailableVoices(list);
+    };
+
+    loadVoices();
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+    return () => {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.onvoiceschanged = null;
+      }
+    };
+  }, []);
+
   // Chat State
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     {
@@ -324,6 +366,218 @@ export default function Home() {
   const [isSendingChat, setIsSendingChat] = useState<boolean>(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+  // Speech Helper (TTS with ElevenLabs Cloud Neural Voice + Web Speech Fallback)
+  const speakText = useCallback(
+    async (textToSpeak: string, onEnd?: () => void) => {
+      if (!isTtsEnabled || typeof window === 'undefined') {
+        onEnd?.();
+        return;
+      }
+
+      // Stop any prior speech or audio playback
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+      if (activeAudioRef.current) {
+        activeAudioRef.current.pause();
+        activeAudioRef.current = null;
+      }
+
+      setSpokenText(textToSpeak);
+      setIsSpeaking(true);
+      setSentiment('explaining');
+
+      // Web Speech synthesis execution helper
+      const fallbackToWebSpeech = () => {
+        if (!('speechSynthesis' in window)) {
+          setIsSpeaking(false);
+          setSpokenText('');
+          setSentiment('idle');
+          onEnd?.();
+          return;
+        }
+
+        const utterance = new SpeechSynthesisUtterance(textToSpeak);
+        utterance.rate = playbackSpeed === 0.5 ? 0.85 : playbackSpeed === 2 ? 1.25 : 1.0;
+        utterance.pitch = voicePitch;
+
+        const voices = window.speechSynthesis.getVoices();
+        let chosenVoice: SpeechSynthesisVoice | undefined;
+        if (selectedVoiceURI && selectedVoiceURI !== 'elevenlabs-neural') {
+          chosenVoice = voices.find((v) => (v.voiceURI || v.name) === selectedVoiceURI);
+        }
+        if (!chosenVoice) {
+          chosenVoice =
+            voices.find(
+              (v) =>
+                v.lang.startsWith('en') &&
+                (v.name.includes('Natural') ||
+                  v.name.includes('Jenny') ||
+                  v.name.includes('Zira') ||
+                  v.name.includes('Samantha') ||
+                  v.name.includes('Google') ||
+                  v.name.includes('David') ||
+                  v.name.includes('Aria'))
+            ) || voices[0];
+        }
+        if (chosenVoice) utterance.voice = chosenVoice;
+
+        utterance.onboundary = (ev) => {
+          if (ev.name === 'word') {
+            const remainder = textToSpeak.slice(ev.charIndex);
+            const match = remainder.match(/^[\w']+/);
+            const word = match ? match[0] : '';
+            if (word && onWordBoundaryRef.current) onWordBoundaryRef.current(word);
+          }
+        };
+
+        utterance.onend = () => {
+          setIsSpeaking(false);
+          setSpokenText('');
+          setSentiment('idle');
+          onEnd?.();
+        };
+        utterance.onerror = () => {
+          setIsSpeaking(false);
+          setSpokenText('');
+          setSentiment('idle');
+          onEnd?.();
+        };
+
+        window.speechSynthesis.speak(utterance);
+      };
+
+      // 1. If ElevenLabs Cloud Neural Voice is selected, request high-fidelity audio from /api/tts
+      if (selectedVoiceURI === 'elevenlabs-neural') {
+        try {
+          const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000';
+          const ttsRes = await fetch(`${backendUrl}/api/tts`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: textToSpeak }),
+          });
+
+          if (ttsRes.ok) {
+            const ttsData = await ttsRes.json();
+            if (ttsData.audioUrl && ttsData.audioUrl.startsWith('data:audio/')) {
+              const audio = new Audio(ttsData.audioUrl);
+              activeAudioRef.current = audio;
+
+              const words = textToSpeak.split(/\s+/);
+              let wordIdx = 0;
+              const wordInterval = setInterval(() => {
+                if (wordIdx < words.length && onWordBoundaryRef.current) {
+                  onWordBoundaryRef.current(words[wordIdx]);
+                  wordIdx++;
+                } else {
+                  clearInterval(wordInterval);
+                }
+              }, 250);
+
+              audio.onended = () => {
+                clearInterval(wordInterval);
+                activeAudioRef.current = null;
+                setIsSpeaking(false);
+                setSpokenText('');
+                setSentiment('idle');
+                onEnd?.();
+              };
+
+              audio.onerror = () => {
+                clearInterval(wordInterval);
+                activeAudioRef.current = null;
+                fallbackToWebSpeech();
+              };
+
+              await audio.play();
+              return;
+            }
+          }
+        } catch {
+          // Backend or network error, fallback cleanly to local Web Speech
+        }
+      }
+
+      // 2. Default/Fallback: Web Speech synthesis
+      fallbackToWebSpeech();
+    },
+    [isTtsEnabled, playbackSpeed, selectedVoiceURI, voicePitch]
+  );
+
+  // Sync isPlayingVis ref for async callbacks
+  const isPlayingVisRef = useRef<boolean>(isPlayingVis);
+  useEffect(() => {
+    isPlayingVisRef.current = isPlayingVis;
+  }, [isPlayingVis]);
+
+  // Toggle Visualization Play/Pause with Speech Sync
+  const handleTogglePlayVis = useCallback(() => {
+    if (isPlayingVis) {
+      setIsPlayingVis(false);
+      isPlayingVisRef.current = false;
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+      setIsSpeaking(false);
+      setSentiment('idle');
+    } else {
+      setIsPlayingVis(true);
+      isPlayingVisRef.current = true;
+    }
+  }, [isPlayingVis]);
+
+  // Reset Visualization with Speech Cancel
+  const handleResetVis = useCallback(() => {
+    setIsPlayingVis(false);
+    isPlayingVisRef.current = false;
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    setIsSpeaking(false);
+    setSentiment('idle');
+    setCurrentStepIdx(0);
+  }, []);
+
+  // Narrate individual step on demand
+  const handleNarrateStep = useCallback(
+    (stepIdx: number) => {
+      const steps = selectedTopic.visualScript?.steps || [];
+      const step = steps[stepIdx];
+      if (!step) return;
+      const narration = step.description || `Executing step ${stepIdx + 1}: ${step.action}.`;
+      setSentiment('explaining');
+      speakText(narration);
+    },
+    [selectedTopic, speakText]
+  );
+
+  // Handle Voice Switch with Instant Audible Feedback
+  const handleVoiceChange = useCallback(
+    (uri: string) => {
+      setSelectedVoiceURI(uri);
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('ada_selected_voice', uri);
+        } catch {
+          // Ignore localStorage errors
+        }
+      }
+      if (uri === 'elevenlabs-neural') {
+        speakText('ElevenLabs Cloud Neural Voice activated. Hello! I am Professor Ada.');
+      } else {
+        const chosen = availableVoices.find((v) => (v.voiceURI || v.name) === uri);
+        const voiceName = chosen
+          ? chosen.name
+              .replace(/Microsoft|Google|Desktop|Online \(Natural\)/gi, '')
+              .replace(/\(.*?\)/g, '')
+              .trim() || chosen.name
+          : 'new voice';
+        speakText(`Voice changed to ${voiceName}. Hello! I am Professor Ada.`);
+      }
+    },
+    [availableVoices, speakText]
+  );
+
   // Sync Code Text when topic or language changes
   useEffect(() => {
     if (selectedTopic?.codeReferences) {
@@ -331,6 +585,12 @@ export default function Home() {
       setRunOutput(null);
       setCurrentStepIdx(0);
       setIsPlayingVis(false);
+      isPlayingVisRef.current = false;
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+      setIsSpeaking(false);
+      setSentiment('idle');
     }
   }, [selectedTopic, codeLang]);
 
@@ -339,24 +599,51 @@ export default function Home() {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages, isSendingChat]);
 
-  // Step Auto-Player
+  // Step Auto-Player with Professor Ada Speech Lecture
   useEffect(() => {
     if (!isPlayingVis) return;
+
     const steps = selectedTopic.visualScript?.steps || [];
-    if (steps.length <= 1) return;
+    if (steps.length === 0) {
+      setIsPlayingVis(false);
+      return;
+    }
 
-    const interval = setInterval(() => {
-      setCurrentStepIdx((prev) => {
-        if (prev >= steps.length - 1) {
-          setIsPlayingVis(false);
-          return prev;
-        }
-        return prev + 1;
-      });
-    }, 2400 / playbackSpeed);
+    const currentStep = steps[currentStepIdx];
+    if (!currentStep) return;
 
-    return () => clearInterval(interval);
-  }, [isPlayingVis, selectedTopic, playbackSpeed]);
+    setSentiment('explaining');
+    const narration =
+      currentStep.description || `Executing step ${currentStepIdx + 1}: ${currentStep.action}.`;
+
+    let timer: NodeJS.Timeout | null = null;
+
+    speakText(narration, () => {
+      // Advance to next step once Professor Ada finishes explaining
+      if (isPlayingVisRef.current) {
+        timer = setTimeout(() => {
+          if (isPlayingVisRef.current) {
+            setCurrentStepIdx((prev) => {
+              if (prev >= steps.length - 1) {
+                setIsPlayingVis(false);
+                isPlayingVisRef.current = false;
+                setSentiment('celebrating');
+                speakText(
+                  `Visualization complete! That concludes all steps for ${toTitleCase(selectedTopic.title)}.`
+                );
+                return prev;
+              }
+              return prev + 1;
+            });
+          }
+        }, 800 / playbackSpeed);
+      }
+    });
+
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [isPlayingVis, currentStepIdx, selectedTopic, playbackSpeed, speakText]);
 
   // Statistics
   const totalCount = allTopics.length;
@@ -386,56 +673,6 @@ export default function Home() {
       return matchesSearch && matchesCat && matchesDiff;
     });
   }, [allTopics, searchQuery, filterCategory, filterDifficulty]);
-
-  // Speech Helper (TTS)
-  const speakText = useCallback(
-    (textToSpeak: string) => {
-      if (!isTtsEnabled || typeof window === 'undefined' || !('speechSynthesis' in window)) return;
-      window.speechSynthesis.cancel();
-      setSpokenText(textToSpeak);
-      setIsSpeaking(true);
-
-      const utterance = new SpeechSynthesisUtterance(textToSpeak);
-      utterance.rate = 1.0;
-      utterance.pitch = 1.0;
-
-      const voices = window.speechSynthesis.getVoices();
-      const naturalVoice = voices.find(
-        (v) =>
-          v.lang.startsWith('en') &&
-          (v.name.includes('Natural') ||
-            v.name.includes('Google') ||
-            v.name.includes('Samantha') ||
-            v.name.includes('Jenny') ||
-            v.name.includes('David') ||
-            v.name.includes('Aria'))
-      );
-      if (naturalVoice) utterance.voice = naturalVoice;
-
-      utterance.onboundary = (ev) => {
-        if (ev.name === 'word') {
-          const remainder = textToSpeak.slice(ev.charIndex);
-          const match = remainder.match(/^[\w']+/);
-          const word = match ? match[0] : '';
-          if (word && onWordBoundaryRef.current) onWordBoundaryRef.current(word);
-        }
-      };
-
-      utterance.onend = () => {
-        setIsSpeaking(false);
-        setSpokenText('');
-        setSentiment('idle');
-      };
-      utterance.onerror = () => {
-        setIsSpeaking(false);
-        setSpokenText('');
-        setSentiment('idle');
-      };
-
-      window.speechSynthesis.speak(utterance);
-    },
-    [isTtsEnabled]
-  );
 
   // Send Chat Message
   const handleSendMessage = async (textToSend?: string) => {
@@ -725,6 +962,63 @@ export default function Home() {
                 className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-slate-900/90 border border-slate-800 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/60 focus:ring-1 focus:ring-cyan-500/20 transition-all"
               />
             </div>
+
+            {/* Voice Persona Selector */}
+            {isTtsEnabled && (
+              <div className="flex items-center gap-1.5 bg-slate-900/90 border border-slate-800 rounded-lg px-2.5 py-1 text-xs">
+                <span className="text-[10px] text-slate-500 font-mono hidden lg:inline">
+                  Voice:
+                </span>
+                <select
+                  value={selectedVoiceURI}
+                  onChange={(e) => handleVoiceChange(e.target.value)}
+                  className="bg-transparent text-cyan-300 text-xs font-medium focus:outline-none cursor-pointer max-w-[140px] sm:max-w-[190px] md:max-w-[240px] truncate"
+                  title="Choose speaking voice for Professor Ada"
+                >
+                  <option
+                    value="elevenlabs-neural"
+                    className="bg-slate-900 text-cyan-300 font-semibold"
+                  >
+                    ✨ ElevenLabs Cloud Neural (Ada)
+                  </option>
+                  {availableVoices.map((v) => {
+                    const cleanName =
+                      v.name
+                        .replace(/Microsoft|Google|Desktop|Online \(Natural\)/gi, '')
+                        .replace(/\(.*?\)/g, '')
+                        .trim() || v.name;
+                    return (
+                      <option
+                        key={v.voiceURI || v.name}
+                        value={v.voiceURI || v.name}
+                        className="bg-slate-900 text-slate-200"
+                      >
+                        {cleanName} ({v.lang})
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+            )}
+
+            {/* Voice Tone Selector */}
+            {isTtsEnabled && (
+              <select
+                value={voicePitch}
+                onChange={(e) => {
+                  const p = Number(e.target.value);
+                  setVoicePitch(p);
+                  speakText('Pitch adjusted.');
+                }}
+                className="hidden xl:inline-block bg-slate-900/90 text-slate-400 border border-slate-800 text-[11px] rounded-lg px-2 py-1 focus:outline-none cursor-pointer"
+                title="Tone Pitch: Scholarly, Normal, Deeper, or Higher"
+              >
+                <option value={0.85}>Pitch: 0.85x (Deep)</option>
+                <option value={1.0}>Pitch: 1.0x (Scholarly)</option>
+                <option value={1.15}>Pitch: 1.15x (Bright)</option>
+                <option value={1.3}>Pitch: 1.3x (Higher)</option>
+              </select>
+            )}
 
             {/* TTS Toggle */}
             <button
@@ -1257,6 +1551,10 @@ export default function Home() {
                           setIsPlaying={setIsPlayingVis}
                           speed={playbackSpeed}
                           setSpeed={setPlaybackSpeed}
+                          onTogglePlay={handleTogglePlayVis}
+                          onReset={handleResetVis}
+                          onNarrateStep={handleNarrateStep}
+                          isSpeaking={isSpeaking}
                         />
                       )}
 
@@ -1323,6 +1621,10 @@ export default function Home() {
                           setIsPlaying={setIsPlayingVis}
                           speed={playbackSpeed}
                           setSpeed={setPlaybackSpeed}
+                          onTogglePlay={handleTogglePlayVis}
+                          onReset={handleResetVis}
+                          onNarrateStep={handleNarrateStep}
+                          isSpeaking={isSpeaking}
                         />
                       </div>
                     </div>
@@ -1481,6 +1783,10 @@ interface VisualizerProps {
   setIsPlaying: React.Dispatch<React.SetStateAction<boolean>>;
   speed: number;
   setSpeed: React.Dispatch<React.SetStateAction<number>>;
+  onTogglePlay?: () => void;
+  onReset?: () => void;
+  onNarrateStep?: (stepIdx: number) => void;
+  isSpeaking?: boolean;
 }
 
 function AlgorithmVisualizerSection({
@@ -1491,6 +1797,10 @@ function AlgorithmVisualizerSection({
   setIsPlaying,
   speed,
   setSpeed,
+  onTogglePlay,
+  onReset,
+  onNarrateStep,
+  isSpeaking,
 }: VisualizerProps) {
   const steps = topic.visualScript?.steps || [
     {
@@ -1525,19 +1835,30 @@ function AlgorithmVisualizerSection({
           <span className="text-xs font-semibold text-slate-200">
             {toTitleCase(topic.title)} — Step {currentStepIdx + 1} of {steps.length}
           </span>
+          {isSpeaking && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 animate-pulse">
+              <Volume2 className="w-3 h-3" />
+              <span>Ada Explaining...</span>
+            </span>
+          )}
         </div>
 
         {/* Playback Controls */}
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setCurrentStepIdx(0)}
+            onClick={onReset ? onReset : () => setCurrentStepIdx(0)}
             className="p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors"
             title="Reset to Step 1"
           >
             <RotateCcw className="w-3.5 h-3.5" />
           </button>
           <button
-            onClick={() => setCurrentStepIdx((prev) => Math.max(0, prev - 1))}
+            onClick={() => {
+              if (isPlaying && onTogglePlay) {
+                onTogglePlay();
+              }
+              setCurrentStepIdx((prev) => Math.max(0, prev - 1));
+            }}
             disabled={currentStepIdx === 0}
             className="p-1.5 rounded-lg bg-slate-800 disabled:opacity-40 text-slate-300 hover:text-white transition-colors"
             title="Previous Step"
@@ -1545,18 +1866,28 @@ function AlgorithmVisualizerSection({
             <ChevronLeft className="w-3.5 h-3.5" />
           </button>
           <button
-            onClick={() => setIsPlaying(!isPlaying)}
-            className="px-3 py-1 rounded-lg bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 hover:bg-cyan-500/30 text-xs font-semibold flex items-center gap-1 transition-all"
+            onClick={onTogglePlay ? onTogglePlay : () => setIsPlaying(!isPlaying)}
+            className={`px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+              isPlaying
+                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30'
+                : 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 hover:bg-cyan-500/30'
+            }`}
+            title={isPlaying ? 'Pause lecture' : 'Play step-by-step lecture with Professor Ada'}
           >
             {isPlaying ? (
               <Pause className="w-3 h-3 fill-current" />
             ) : (
               <Play className="w-3 h-3 fill-current" />
             )}
-            <span>{isPlaying ? 'Pause' : 'Play'}</span>
+            <span>{isPlaying ? 'Pause Lecture' : 'Play Lecture'}</span>
           </button>
           <button
-            onClick={() => setCurrentStepIdx((prev) => Math.min(steps.length - 1, prev + 1))}
+            onClick={() => {
+              if (isPlaying && onTogglePlay) {
+                onTogglePlay();
+              }
+              setCurrentStepIdx((prev) => Math.min(steps.length - 1, prev + 1));
+            }}
             disabled={currentStepIdx >= steps.length - 1}
             className="p-1.5 rounded-lg bg-slate-800 disabled:opacity-40 text-slate-300 hover:text-white transition-colors"
             title="Next Step"
@@ -1598,11 +1929,12 @@ function AlgorithmVisualizerSection({
             <div
               className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center font-bold text-xs shadow-lg transition-all ${currentStepIdx === 0 ? 'bg-cyan-500 text-slate-950 scale-110 ring-4 ring-cyan-500/30' : 'bg-slate-800 text-slate-200 border border-slate-700'}`}
             >
-              <span>10</span>
-              <span className="text-[9px] font-mono opacity-70">root</span>
+              50
+              <span className="text-[9px] opacity-70">Root</span>
             </div>
-            {/* Branches */}
-            <div className="w-full flex justify-around">
+
+            {/* Level 1 Connectors & Children */}
+            <div className="w-full flex items-center justify-around">
               <div
                 className={`w-11 h-11 rounded-2xl flex flex-col items-center justify-center font-bold text-xs shadow-lg transition-all ${currentStepIdx === 1 ? 'bg-cyan-500 text-slate-950 scale-110 ring-4 ring-cyan-500/30' : 'bg-slate-800 text-slate-200 border border-slate-700'}`}
               >
@@ -1711,18 +2043,32 @@ function AlgorithmVisualizerSection({
 
       {/* Step Pedagogical Description Box */}
       <div className="p-4 border-t border-slate-800 bg-[#090d18] shrink-0">
-        <div className="flex items-start gap-3">
-          <div className="w-7 h-7 rounded-xl bg-cyan-500/20 border border-cyan-500/40 text-cyan-400 font-bold flex items-center justify-center text-xs shrink-0 mt-0.5">
-            {currentStepIdx + 1}
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <div className="w-7 h-7 rounded-xl bg-cyan-500/20 border border-cyan-500/40 text-cyan-400 font-bold flex items-center justify-center text-xs shrink-0 mt-0.5">
+              {currentStepIdx + 1}
+            </div>
+            <div>
+              <h4 className="text-xs font-semibold text-slate-200 uppercase tracking-wide">
+                {currentStep.action || 'Execution Invariant'}
+              </h4>
+              <p className="text-xs text-slate-300 leading-relaxed mt-0.5">
+                {currentStep.description}
+              </p>
+            </div>
           </div>
-          <div>
-            <h4 className="text-xs font-semibold text-slate-200 uppercase tracking-wide">
-              {currentStep.action || 'Execution Invariant'}
-            </h4>
-            <p className="text-xs text-slate-300 leading-relaxed mt-0.5">
-              {currentStep.description}
-            </p>
-          </div>
+          {onNarrateStep && (
+            <button
+              onClick={() => onNarrateStep(currentStepIdx)}
+              className="px-2.5 py-1.5 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-cyan-300 text-xs font-medium flex items-center gap-1.5 transition-all shrink-0"
+              title="Listen to Professor Ada explain this step"
+            >
+              <Volume2
+                className={`w-3.5 h-3.5 ${isSpeaking ? 'animate-pulse text-cyan-400' : ''}`}
+              />
+              <span>Explain</span>
+            </button>
+          )}
         </div>
       </div>
     </div>
