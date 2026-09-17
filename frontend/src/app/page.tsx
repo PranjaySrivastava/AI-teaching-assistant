@@ -629,7 +629,7 @@ function getAlgorithmVisualization(topic: TopicItem): AlgorithmVisualModel {
   const tc = getTc(topic);
   const sc = getSc(topic);
   const summary =
-    topic.expectedAnswer?.summary || 'Optimized state transitions across the input structure.';
+    topic.expectedAnswer?.explanation || 'Optimized state transitions across the input structure.';
 
   return {
     type: 'array_general',
@@ -688,7 +688,9 @@ export default function Home() {
   const allTopics = useMemo<TopicItem[]>(() => rawTopicsData as unknown as TopicItem[], []);
 
   // Navigation State
-  const [currentPage, setCurrentPage] = useState<'dashboard' | 'modules' | 'codelab'>('dashboard');
+  const [currentPage, setCurrentPage] = useState<'dashboard' | 'modules' | 'codelab' | 'qa'>(
+    'dashboard'
+  );
 
   // Topic Selection
   const [selectedTopicId, setSelectedTopicId] = useState<string>(allTopics[0]?.id || '001-two-sum');
@@ -697,7 +699,9 @@ export default function Home() {
   }, [allTopics, selectedTopicId]);
 
   // Code Lab View Mode: Single Tab vs Split View
-  const [activeTab, setActiveTab] = useState<'code' | 'visualization' | 'complexity'>('code');
+  const [activeTab, setActiveTab] = useState<'code' | 'explainer' | 'visualization' | 'complexity'>(
+    'code'
+  );
   const [isSplitView, setIsSplitView] = useState<boolean>(false);
   const [splitRatio, setSplitRatio] = useState<number>(50); // percentage for code in split view
   const [codeLang, setCodeLang] = useState<'python' | 'cpp' | 'java'>('python');
@@ -829,7 +833,7 @@ export default function Home() {
 
       // 1. ElevenLabs Cloud Neural Voice (Permanent Voice ID: ZBagl2bR5Xv44f5Xpxn6)
       try {
-        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000';
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5001';
         const ttsRes = await fetch(`${backendUrl}/api/tts`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -946,6 +950,220 @@ export default function Home() {
     }
   }, [selectedTopic, codeLang]);
 
+  // ==================== OPEN DSA Q&A ARENA STATE ====================
+  interface QaMessage {
+    id: string;
+    sender: 'user' | 'assistant';
+    text: string;
+    code?: { language: string; snippet: string } | null;
+    timestamp: string;
+    mood?: Sentiment;
+    suggestedFollowUps?: string[];
+  }
+
+  const [qaMessages, setQaMessages] = useState<QaMessage[]>([
+    {
+      id: 'welcome-qa',
+      sender: 'assistant',
+      text: 'Welcome to the **DSA Open Q&A Arena**! Here you can ask me ANY question across all of computer science and algorithms — from graph shortest paths and dynamic programming to tree balancing, amortized proofs, and system design data structures. Type your inquiry below or tap the microphone to speak!',
+      timestamp: 'Just now',
+      mood: 'encouraging',
+      suggestedFollowUps: [
+        "Explain Dijkstra's shortest path algorithm",
+        'How does QuickSort partitioning work?',
+        'Difference between Memoization and Tabulation in DP',
+        'Compare AVL Trees vs Red-Black Trees',
+        'What is a Trie and why is lookup O(L)?',
+        "How does Floyd's Tortoise and Hare cycle detection work in O(1) space?",
+      ],
+    },
+  ]);
+  const [qaInput, setQaInput] = useState<string>('');
+  const [isSendingQa, setIsSendingQa] = useState<boolean>(false);
+  const [copiedQaCodeId, setCopiedQaCodeId] = useState<string | null>(null);
+  const qaEndRef = useRef<HTMLDivElement>(null);
+
+  // Send Open Q&A Message
+  const handleSendQa = async (textOverride?: string) => {
+    const query = (textOverride || qaInput).trim();
+    if (!query || isSendingQa) return;
+
+    const userMsg: QaMessage = {
+      id: String(Date.now()),
+      sender: 'user',
+      text: query,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    };
+
+    setQaMessages((prev) => [...prev, userMsg]);
+    setQaInput('');
+    setIsSendingQa(true);
+    setSentiment('thinking');
+
+    try {
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5001';
+      let assistantText = '';
+      let codeSnippet: { language: string; snippet: string } | null = null;
+      let mood: Sentiment = 'explaining';
+      let followUps: string[] = [];
+
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 12000);
+        const res = await fetch(`${backendUrl}/api/ask`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            question: query,
+            sessionId: 'qa-arena-session',
+          }),
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+
+        if (res.ok) {
+          const data = await res.json();
+          assistantText = data.explanation || data.answer || '';
+          if (data.code?.snippet) {
+            codeSnippet = data.code;
+          }
+          if (data.mood) mood = data.mood;
+          if (data.suggestedFollowUps) followUps = data.suggestedFollowUps;
+        }
+      } catch {
+        // Backend offline -> fallback
+      }
+
+      // Offline algorithmic knowledge resolver
+      if (!assistantText) {
+        const qLower = query.toLowerCase();
+
+        // 1. Quicksort
+        if (qLower.includes('quicksort') || qLower.includes('quick sort')) {
+          assistantText =
+            '**QuickSort** is an optimal divide-and-conquer sorting algorithm. It picks a "pivot" element and partitions the array into elements smaller than the pivot on the left, and elements greater on the right, then recursively sorts both partitions.';
+          codeSnippet = {
+            language: 'python',
+            snippet:
+              'def quicksort(arr):\n    if len(arr) <= 1:\n        return arr\n    pivot = arr[len(arr) // 2]\n    left = [x for x in arr if x < pivot]\n    middle = [x for x in arr if x == pivot]\n    right = [x for x in arr if x > pivot]\n    return quicksort(left) + middle + quicksort(right)',
+          };
+          followUps = [
+            'What is the worst-case time complexity of QuickSort?',
+            'How does 3-way partitioning prevent quadratic degradation?',
+          ];
+          mood = 'explaining';
+        }
+        // 2. Dijkstra
+        else if (qLower.includes('dijkstra') || qLower.includes('shortest path')) {
+          assistantText =
+            "**Dijkstra's Algorithm** computes single-source shortest paths in weighted graphs with non-negative edge weights. Using a min-priority queue (heap), it greedily extracts the unvisited vertex with minimal provisional distance and relaxes its adjacent edges in **O((V + E) log V)** time.";
+          codeSnippet = {
+            language: 'python',
+            snippet:
+              'import heapq\n\ndef dijkstra(graph, start):\n    distances = {node: float("inf") for node in graph}\n    distances[start] = 0\n    pq = [(0, start)]\n    while pq:\n        curr_dist, u = heapq.heappop(pq)\n        if curr_dist > distances[u]: continue\n        for v, weight in graph[u]:\n            if distances[u] + weight < distances[v]:\n                distances[v] = distances[u] + weight\n                heapq.heappush(pq, (distances[v], v))\n    return distances',
+          };
+          followUps = [
+            'Why does Dijkstra fail with negative edge weights?',
+            'How does Bellman-Ford handle negative weight cycles?',
+          ];
+          mood = 'explaining';
+        }
+        // 3. Dynamic Programming
+        else if (
+          qLower.includes('dynamic programming') ||
+          qLower.includes('memoization') ||
+          qLower.includes('tabulation')
+        ) {
+          assistantText =
+            '**Dynamic Programming (DP)** solves complex problems by breaking them into overlapping subproblems with optimal substructure.\n\n• **Memoization (Top-Down)**: Computes recursively and caches answers in a hash table or array.\n• **Tabulation (Bottom-Up)**: Iteratively populates a table starting directly from base cases without recursion stack overhead.';
+          codeSnippet = {
+            language: 'python',
+            snippet:
+              '# Fibonacci with Memoization (Top-Down)\ndef fib_memo(n, memo={}):\n    if n <= 1: return n\n    if n not in memo:\n        memo[n] = fib_memo(n - 1, memo) + fib_memo(n - 2, memo)\n    return memo[n]\n\n# Fibonacci with Tabulation (Bottom-Up)\ndef fib_tab(n):\n    if n <= 1: return n\n    dp = [0] * (n + 1)\n    dp[1] = 1\n    for i in range(2, n + 1):\n        dp[i] = dp[i-1] + dp[i-2]\n    return dp[n]',
+          };
+          followUps = [
+            'How do you recognize overlapping subproblems?',
+            'What is state space reduction in DP?',
+          ];
+          mood = 'explaining';
+        }
+        // 4. AVL vs Red-Black Trees
+        else if (
+          qLower.includes('avl') ||
+          qLower.includes('red-black') ||
+          qLower.includes('red black')
+        ) {
+          assistantText =
+            '**AVL Trees vs Red-Black Trees**:\n\n• **AVL Trees**: Strictly balanced (balance factor height difference <= 1). Faster lookups with guaranteed lower height, but more frequent rotations during insertions/deletions.\n• **Red-Black Trees**: Loosely balanced (longest path <= 2 * shortest path). Fewer rotations on writes, making them standard for system libraries (e.g. C++ std::map, Java TreeMap).';
+          followUps = [
+            'What are the four rotation cases in AVL trees?',
+            'What are the 5 color invariants of a Red-Black Tree?',
+          ];
+          mood = 'explaining';
+        }
+        // 5. Trie
+        else if (qLower.includes('trie') || qLower.includes('prefix tree')) {
+          assistantText =
+            'A **Trie (Prefix Tree)** is an associative tree data structure where each edge represents a character transition. Searching, insertion, and prefix matching run in optimal **O(L)** time, where L is the query key length, completely independent of the total dictionary size!';
+          codeSnippet = {
+            language: 'python',
+            snippet:
+              'class TrieNode:\n    def __init__(self):\n        self.children = {}\n        self.is_end = False\n\nclass Trie:\n    def __init__(self):\n        self.root = TrieNode()\n    def insert(self, word):\n        curr = self.root\n        for ch in word:\n            if ch not in curr.children: curr.children[ch] = TrieNode()\n            curr = curr.children[ch]\n        curr.is_end = True',
+          };
+          followUps = [
+            'How do you implement autocomplete using a Trie?',
+            'What is the space complexity of a Trie?',
+          ];
+          mood = 'explaining';
+        }
+        // 6. Floyd's Tortoise & Hare
+        else if (
+          qLower.includes('floyd') ||
+          qLower.includes('tortoise') ||
+          qLower.includes('cycle')
+        ) {
+          assistantText =
+            "**Floyd's Cycle-Finding Algorithm (Tortoise and Hare)** detects cycles in linked lists or sequence mappings using two pointers moving at different speeds: slow advances 1 node per step, fast advances 2 nodes. If a cycle exists, they must meet within O(n) time and O(1) auxiliary space.";
+          codeSnippet = {
+            language: 'python',
+            snippet:
+              'def has_cycle(head):\n    slow, fast = head, head\n    while fast and fast.next:\n        slow = slow.next\n        fast = fast.next.next\n        if slow == fast: return True\n    return False',
+          };
+          followUps = [
+            'How do you find the starting node of the cycle?',
+            'Why is fast pointer speed 2 optimal?',
+          ];
+          mood = 'explaining';
+        }
+        // Generic fallback for any other question
+        else {
+          assistantText = `Regarding **"${query}"**: This is a classic question in data structures and algorithmic design. The key is to analyze the underlying state invariant, evaluate the temporal bound O(n) or O(log n), and select the most optimal auxiliary memory structure.`;
+          followUps = [
+            'Can you provide a code example for this?',
+            'What is the space-time tradeoff?',
+          ];
+          mood = 'explaining';
+        }
+      }
+
+      const botMsg: QaMessage = {
+        id: String(Date.now() + 1),
+        sender: 'assistant',
+        text: assistantText,
+        code: codeSnippet,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        mood,
+        suggestedFollowUps: followUps,
+      };
+
+      setQaMessages((prev) => [...prev, botMsg]);
+      setSentiment(mood);
+      speakText(assistantText);
+    } finally {
+      setIsSendingQa(false);
+    }
+  };
+
   // Auto-scroll chat
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -1047,13 +1265,13 @@ export default function Home() {
     setSentiment('thinking');
 
     try {
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000';
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5001';
       let assistantText = '';
       let mood: Sentiment = 'explaining';
 
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 2000);
+        const timeoutId = setTimeout(() => controller.abort(), 12000);
         const res = await fetch(`${backendUrl}/api/ask`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1069,8 +1287,19 @@ export default function Home() {
 
         if (res.ok) {
           const data = await res.json();
-          assistantText = data.explanation || data.answer || '';
-          if (data.mood) mood = data.mood;
+          let exp = data.explanation || data.answer || '';
+          // If backend returned the generic out-of-scope deflection while we are in
+          // Code Lab (selectedTopic is set), ignore it and fall through to local fallback
+          const isOutOfScopeDeflection =
+            exp.includes('I specialize in Data Structures and Algorithms') ||
+            exp.includes("Let's focus our study on topics like Sorting");
+          if (!isOutOfScopeDeflection) {
+            if (data.code?.snippet) {
+              exp += `\n\n\`\`\`${data.code.language || 'python'}\n${data.code.snippet}\n\`\`\``;
+            }
+            assistantText = exp;
+          }
+          if (data.mood && !isOutOfScopeDeflection) mood = data.mood;
         }
       } catch {
         // Backend offline or timeout -> use rich contextual pedagogical assistant engine
@@ -1082,7 +1311,58 @@ export default function Home() {
         const tc = getTc(selectedTopic);
         const sc = getSc(selectedTopic);
 
-        if (qLower.includes('intuition') || qLower.includes('explain') || qLower.includes('how')) {
+        // 1. Check if user query matches ANY topic in the 180-problem curriculum
+        const matchedTopic = allTopics.find((t) => {
+          const tId = t.id.toLowerCase().replace(/^\d+-/, '');
+          const tTitle = t.title
+            .toLowerCase()
+            .replace(/^(\d+[\.\s-]*)+/, '')
+            .trim();
+          const cleanKey = tTitle.replace(/algorithm|problem|implementation/gi, '').trim();
+          return (
+            (tId.length > 2 && qLower.includes(tId)) ||
+            (tTitle.length > 2 && qLower.includes(tTitle)) ||
+            (cleanKey.length > 3 && qLower.includes(cleanKey))
+          );
+        });
+
+        if (matchedTopic && matchedTopic.id !== selectedTopic.id) {
+          const mTitle = toTitleCase(matchedTopic.title);
+          const mSummary =
+            matchedTopic.expectedAnswer?.explanation ||
+            `Optimal algorithm for ${mTitle}, maintaining key invariants with asymptotic time complexity ${getTc(matchedTopic)}.`;
+          // In Code Lab we never switch topics — answer about the current problem
+          // Topic switching is reserved for the Ask Ada (QA Arena) section
+          assistantText = `**${mTitle}**:\n${mSummary}\n\n• **Time Complexity**: ${getTc(matchedTopic)}\n• **Space Complexity**: ${getSc(matchedTopic)}`;
+          mood = 'explaining';
+          // Do NOT call setSelectedTopicId here — Code Lab stays on current topic
+        } else if (qLower.includes('dijkstra') || qLower.includes('shortest path')) {
+          assistantText = `**Dijkstra's Algorithm** computes single-source shortest paths on graphs with non-negative edge weights. Using a min-priority queue (heap), it runs in **O((V + E) log V)** time by greedily settling the closest vertex and relaxing adjacent incident edges.`;
+          mood = 'explaining';
+        } else if (
+          qLower.includes('dynamic programming') ||
+          qLower.includes('memoization') ||
+          qLower.includes('tabulation')
+        ) {
+          assistantText = `**Dynamic Programming (DP)** solves complex optimization problems with overlapping subproblems and optimal substructure.\n• **Memoization (Top-Down)**: Computes recursively and caches results in a hash map or array.\n• **Tabulation (Bottom-Up)**: Fills a table iteratively from the base cases up.`;
+          mood = 'explaining';
+        } else if (qLower.includes('trie') || qLower.includes('prefix tree')) {
+          assistantText = `A **Trie (Prefix Tree)** is an associative tree data structure where each node stores character transitions. Insert, search, and prefix matching all operate in optimal **O(L)** time, where L is the query key length, independent of dictionary size.`;
+          mood = 'explaining';
+        } else if (qLower.includes('heap') || qLower.includes('priority queue')) {
+          assistantText = `A **Binary Heap** is a complete binary tree maintaining the heap property (Min-Heap or Max-Heap). It provides **O(1)** peak access, **O(log n)** insertion, and **O(log n)** extraction, making it essential for priority queues.`;
+          mood = 'explaining';
+        } else if (qLower.includes('union find') || qLower.includes('disjoint set')) {
+          assistantText = `**Disjoint Set Union (Union-Find)** tracks partitioned elements. With **path compression** and **union by rank**, find and union operations run in near constant amortized time: **O(α(n))**, where α is the inverse Ackermann function!`;
+          mood = 'explaining';
+        } else if (qLower.includes('graph') || qLower.includes('bfs') || qLower.includes('dfs')) {
+          assistantText = `**Graph Traversals**:\n• **BFS (Breadth-First Search)**: Uses a FIFO queue, traversing level-by-level to find shortest paths on unweighted graphs in **O(V + E)** time.\n• **DFS (Depth-First Search)**: Uses a LIFO stack or recursion, ideal for cycle detection, topological sorting, and path connectivity in **O(V + E)** time.`;
+          mood = 'explaining';
+        } else if (
+          qLower.includes('intuition') ||
+          qLower.includes('explain') ||
+          qLower.includes('how')
+        ) {
           assistantText = `The intuition behind **${cleanTitle}** lies in transforming the brute-force search into an optimal state transition. In the ${CATEGORY_META[selectedTopic.category]?.label || selectedTopic.category} paradigm, we avoid redundant calculations by tracking invariants. This guarantees a time complexity of **${tc}** and auxiliary space of **${sc}**.`;
           mood = 'explaining';
         } else if (
@@ -1127,7 +1407,7 @@ export default function Home() {
       setIsRecording(true);
       setSentiment('thinking');
       try {
-        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000';
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5001';
         await assemblyAiStream.start(backendUrl, {
           onPartialTranscript: (text: string) => {
             setChatInput(text);
@@ -1279,6 +1559,19 @@ export default function Home() {
             <Code2 className="w-5 h-5" />
             <span className="text-[10px] font-medium tracking-tight">Code Lab</span>
           </button>
+
+          <button
+            onClick={() => setCurrentPage('qa')}
+            className={`w-full py-3 rounded-xl flex flex-col items-center justify-center gap-1 transition-all ${
+              currentPage === 'qa'
+                ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 shadow-sm shadow-cyan-500/20'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 border border-transparent'
+            }`}
+            title="Ask Ada — Open DSA Q&A Arena"
+          >
+            <HelpCircle className="w-5 h-5" />
+            <span className="text-[10px] font-medium tracking-tight">Ask Ada</span>
+          </button>
         </nav>
 
         <div className="text-[9px] font-mono text-slate-600 tracking-wider">v2.4</div>
@@ -1318,18 +1611,14 @@ export default function Home() {
               />
             </div>
 
-            {/* Permanent Riya Rao ElevenLabs Voice Badge */}
+            {/* Teaching Assistant Ada Voice Badge */}
             {isTtsEnabled && (
               <div
                 className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900/90 border border-cyan-500/30 text-[11px] text-cyan-300 font-mono shadow-sm"
-                title="Voice: Riya Rao — Engaging & Encouraging Tutor (ElevenLabs ID: ZBagl2bR5Xv44f5Xpxn6)"
+                title="Teaching Assistant Ada"
               >
                 <Volume2 className="w-3.5 h-3.5 text-cyan-400" />
-                <span className="hidden sm:inline text-slate-400">Voice:</span>
-                <span className="font-semibold text-cyan-200">Riya Rao</span>
-                <span className="text-[10px] text-cyan-500/80 font-mono">
-                  (ElevenLabs · ZBagl2bR5Xv44f5Xpxn6)
-                </span>
+                <span className="font-semibold text-cyan-200">Teaching Assistant Ada</span>
               </div>
             )}
 
@@ -1399,6 +1688,13 @@ export default function Home() {
                     >
                       <BookOpen className="w-3.5 h-3.5" />
                       <span>Browse All 180 Topics</span>
+                    </button>
+                    <button
+                      onClick={() => setCurrentPage('qa')}
+                      className="px-5 py-2.5 rounded-xl bg-cyan-950/60 hover:bg-cyan-900/60 text-cyan-300 border border-cyan-500/40 text-xs font-semibold flex items-center gap-2 transition-all shadow-md shadow-cyan-500/10"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>Ask Ada (Open Q&A Arena)</span>
                     </button>
                   </div>
                 </div>
@@ -1735,6 +2031,21 @@ export default function Home() {
 
                     <button
                       onClick={() => {
+                        setActiveTab('explainer');
+                        setIsSplitView(false);
+                      }}
+                      className={`px-3 py-1 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all ${
+                        !isSplitView && activeTab === 'explainer'
+                          ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                          : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                      }`}
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>Code Explainer</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
                         setActiveTab('visualization');
                         setIsSplitView(false);
                       }}
@@ -1811,6 +2122,17 @@ export default function Home() {
 
                             <div className="flex items-center gap-2">
                               <button
+                                onClick={() => {
+                                  setActiveTab('explainer');
+                                  setIsSplitView(false);
+                                }}
+                                className="px-2.5 py-1 rounded bg-cyan-950/60 hover:bg-cyan-900/60 text-cyan-300 border border-cyan-500/40 text-[11px] font-semibold flex items-center gap-1.5 transition-all shadow-sm group"
+                                title="Open Line-by-Line Code Explainer & Audio Lecture"
+                              >
+                                <Sparkles className="w-3 h-3 text-cyan-400 group-hover:rotate-12 transition-transform" />
+                                <span>Explain Code</span>
+                              </button>
+                              <button
                                 onClick={handleCopyCode}
                                 className="px-2.5 py-1 rounded bg-slate-800/80 hover:bg-slate-700 text-slate-300 text-[11px] flex items-center gap-1 transition-all"
                               >
@@ -1855,6 +2177,18 @@ export default function Home() {
                         </div>
                       )}
 
+                      {activeTab === 'explainer' && (
+                        <CodeExplainerSection
+                          topic={selectedTopic}
+                          codeLang={codeLang}
+                          setCodeLang={setCodeLang}
+                          code={codeText}
+                          isSpeaking={isSpeaking}
+                          speakText={speakText}
+                          setSentiment={setSentiment}
+                        />
+                      )}
+
                       {activeTab === 'visualization' && (
                         <AlgorithmVisualizerSection
                           topic={selectedTopic}
@@ -1887,6 +2221,17 @@ export default function Home() {
                               {codeLang === 'cpp' ? 'C++' : codeLang} Solution
                             </span>
                             <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => {
+                                  setIsSplitView(false);
+                                  setActiveTab('explainer');
+                                }}
+                                className="px-2 py-0.5 rounded bg-cyan-950/60 hover:bg-cyan-900/60 text-cyan-300 border border-cyan-500/30 text-[10px] font-semibold flex items-center gap-1 transition-all"
+                                title="Open Code Explainer"
+                              >
+                                <Sparkles className="w-2.5 h-2.5 text-cyan-400" />
+                                <span>Explain</span>
+                              </button>
                               <button
                                 onClick={handleCopyCode}
                                 className="p-1 text-slate-400 hover:text-slate-200"
@@ -2075,6 +2420,224 @@ export default function Home() {
                       </div>
                     </div>
                   </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ==================== 4. OPEN DSA Q&A ARENA VIEW ==================== */}
+          {currentPage === 'qa' && (
+            <div className="h-full flex bg-[#070b14] overflow-hidden">
+              {/* Left & Center: DSA Open Q&A Canvas */}
+              <div className="flex-1 flex flex-col min-w-0 border-r border-slate-800/80 bg-[#070a14] overflow-hidden">
+                {/* Header */}
+                <div className="h-14 px-6 border-b border-slate-800 flex items-center justify-between shrink-0 bg-[#090e1b]/80 backdrop-blur">
+                  <div>
+                    <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-cyan-400" />
+                      <span>DSA Open Q&A Arena</span>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/30">
+                        Live AI Tutor
+                      </span>
+                    </h2>
+                    <p className="text-[11px] text-slate-400">
+                      Ask Professor Ada any concept, algorithm, proof, or code inquiry across all of
+                      computer science.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs font-mono text-slate-400">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span>Ada Ready</span>
+                  </div>
+                </div>
+
+                {/* Quick Prompts Bar */}
+                <div className="px-6 py-2 border-b border-slate-800/60 bg-slate-950/50 flex items-center gap-2 overflow-x-auto no-scrollbar shrink-0">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider shrink-0">
+                    Popular Inquiries:
+                  </span>
+                  {[
+                    "Explain Dijkstra's shortest path",
+                    'How does QuickSort partitioning work?',
+                    'Memoization vs Tabulation in DP',
+                    'AVL vs Red-Black Trees',
+                    'What is a Trie?',
+                    "Floyd's Tortoise & Hare cycle detection",
+                  ].map((prompt) => (
+                    <button
+                      key={prompt}
+                      onClick={() => handleSendQa(prompt)}
+                      className="px-2.5 py-1 rounded-full text-[11px] font-medium bg-slate-900 border border-slate-700/70 hover:border-cyan-500/40 text-slate-300 hover:text-cyan-300 whitespace-nowrap transition-all shadow-sm"
+                    >
+                      {prompt}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Messages Feed */}
+                <div className="flex-1 overflow-y-auto p-6 space-y-4 min-h-0">
+                  {qaMessages.map((msg) => (
+                    <div key={msg.id} className="space-y-2">
+                      {msg.sender === 'user' ? (
+                        <div className="flex justify-end">
+                          <div className="max-w-[80%] rounded-2xl px-4 py-2.5 text-xs bg-gradient-to-r from-cyan-600 to-blue-600 text-white rounded-br-sm shadow-md">
+                            <div className="font-medium">{msg.text}</div>
+                            <div className="text-[9px] text-cyan-200/70 mt-1 text-right">
+                              {msg.timestamp}
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex justify-start">
+                          <div className="max-w-[90%] rounded-2xl p-4 bg-slate-900/90 border border-slate-800/80 rounded-bl-sm shadow-xl space-y-3">
+                            <div className="flex items-center justify-between border-b border-slate-800/60 pb-2">
+                              <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 rounded-full bg-cyan-500/20 text-cyan-400 flex items-center justify-center text-xs font-bold">
+                                  Ada
+                                </div>
+                                <span className="text-xs font-semibold text-slate-200">
+                                  Professor Ada
+                                </span>
+                              </div>
+                              <span className="text-[10px] text-slate-500">{msg.timestamp}</span>
+                            </div>
+
+                            <div className="text-xs text-slate-200 leading-relaxed whitespace-pre-wrap">
+                              {msg.text}
+                            </div>
+
+                            {msg.code && (
+                              <div className="rounded-xl overflow-hidden border border-slate-800 bg-[#05070e]">
+                                <div className="px-3 py-1 bg-slate-850/80 border-b border-slate-800 flex items-center justify-between text-[10px] font-mono text-slate-400">
+                                  <span className="capitalize">
+                                    {msg.code.language} Implementation
+                                  </span>
+                                  <button
+                                    onClick={() => {
+                                      if (msg.code?.snippet) {
+                                        navigator.clipboard.writeText(msg.code.snippet);
+                                        setCopiedQaCodeId(msg.id);
+                                        setTimeout(() => setCopiedQaCodeId(null), 2000);
+                                      }
+                                    }}
+                                    className="hover:text-slate-200 text-cyan-400 transition-colors"
+                                  >
+                                    {copiedQaCodeId === msg.id ? 'Copied!' : 'Copy Code'}
+                                  </button>
+                                </div>
+                                <div className="p-3 font-mono text-xs text-cyan-300/90 whitespace-pre overflow-x-auto leading-relaxed">
+                                  {msg.code.snippet}
+                                </div>
+                              </div>
+                            )}
+
+                            {msg.suggestedFollowUps && msg.suggestedFollowUps.length > 0 && (
+                              <div className="pt-2 border-t border-slate-800/60 space-y-1.5">
+                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                                  Suggested Follow-ups:
+                                </span>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {msg.suggestedFollowUps.map((fu) => (
+                                    <button
+                                      key={fu}
+                                      onClick={() => handleSendQa(fu)}
+                                      className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-800/70 hover:bg-slate-700 text-slate-300 hover:text-cyan-300 border border-slate-700/50 transition-all"
+                                    >
+                                      {fu}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            <div className="flex justify-end pt-1">
+                              <button
+                                onClick={() => speakText(msg.text)}
+                                className="px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-800/70 hover:bg-slate-700 text-slate-300 border border-slate-700/60 flex items-center gap-1.5 transition-all"
+                                title="Listen to Professor Ada speak this answer"
+                              >
+                                <Volume2 className="w-3.5 h-3.5 text-cyan-400" />
+                                <span>Listen to Ada</span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+
+                  {isSendingQa && (
+                    <div className="flex items-center gap-2 text-xs text-cyan-400 bg-slate-900/60 border border-cyan-500/20 px-3 py-2 rounded-2xl w-fit">
+                      <div className="w-3 h-3 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+                      <span>Professor Ada is analyzing algorithmic principles...</span>
+                    </div>
+                  )}
+                  <div ref={qaEndRef} />
+                </div>
+
+                {/* Q&A Input Bar */}
+                <div className="p-4 border-t border-slate-800 bg-[#090d1b]">
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      handleSendQa();
+                    }}
+                    className="flex items-center gap-3"
+                  >
+                    <button
+                      type="button"
+                      onClick={handleToggleRecord}
+                      className={`p-2.5 rounded-xl border transition-all ${
+                        isRecording
+                          ? 'bg-rose-500 text-white border-rose-400 shadow-lg shadow-rose-500/30 animate-pulse'
+                          : 'bg-slate-900 text-slate-400 hover:text-cyan-400 border-slate-800'
+                      }`}
+                      title={isRecording ? 'Stop Recording' : 'Speak Question (AssemblyAI)'}
+                    >
+                      {isRecording ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                    </button>
+
+                    <input
+                      type="text"
+                      value={qaInput}
+                      onChange={(e) => setQaInput(e.target.value)}
+                      placeholder="Ask any question from DSA (e.g. How does Dijkstra work? What is a Red-Black Tree?)..."
+                      className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition-all"
+                    />
+
+                    <button
+                      type="submit"
+                      disabled={!qaInput.trim() || isSendingQa}
+                      className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 disabled:opacity-40 text-white text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-cyan-500/20 transition-all"
+                    >
+                      <span>Ask Ada</span>
+                      <Send className="w-3.5 h-3.5" />
+                    </button>
+                  </form>
+                </div>
+              </div>
+
+              {/* Right Side: Full-Height 3D Avatar (Professor Ada) */}
+              <div className="w-[390px] xl:w-[420px] h-full border-l border-slate-800/80 bg-[#080d19] flex flex-col shrink-0 overflow-hidden select-none">
+                <div className="h-12 px-4 border-b border-slate-800 flex items-center justify-between bg-[#070b16]">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+                    <span className="text-xs font-bold text-slate-200">Professor Ada</span>
+                  </div>
+                  <span className="text-[10px] font-mono text-cyan-400 uppercase tracking-wider">
+                    {sentiment}
+                  </span>
+                </div>
+
+                <div className="flex-1 p-3 min-h-0 flex flex-col">
+                  <AvatarSection
+                    currentSentiment={sentiment}
+                    isListening={isRecording}
+                    isSpeaking={isSpeaking}
+                    spokenText={spokenText}
+                    onWordBoundaryRef={onWordBoundaryRef}
+                    onSentimentChange={setSentiment}
+                  />
                 </div>
               </div>
             </div>
@@ -2598,6 +3161,1003 @@ function AlgorithmVisualizerSection({
               <span>Explain</span>
             </button>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// CODE EXPLAINER DATA MODEL & GENERATOR
+// ============================================================================
+export interface CodeExplainerBlock {
+  id: string;
+  lineNumberLabel: string;
+  lines: number[];
+  codeSnippet: string;
+  roleTag: string;
+  tagColor: 'blue' | 'purple' | 'cyan' | 'emerald' | 'amber' | 'rose' | 'teal';
+  title: string;
+  explanation: string;
+  complexityImpact: string;
+  spokenLecture: string;
+}
+
+const TAG_COLOR_MAP: Record<string, { bg: string; text: string; border: string }> = {
+  blue: { bg: 'bg-blue-500/15', text: 'text-blue-300', border: 'border-blue-500/40' },
+  purple: { bg: 'bg-purple-500/15', text: 'text-purple-300', border: 'border-purple-500/40' },
+  cyan: { bg: 'bg-cyan-500/15', text: 'text-cyan-300', border: 'border-cyan-500/40' },
+  emerald: { bg: 'bg-emerald-500/15', text: 'text-emerald-300', border: 'border-emerald-500/40' },
+  amber: { bg: 'bg-amber-500/15', text: 'text-amber-300', border: 'border-amber-500/40' },
+  rose: { bg: 'bg-rose-500/15', text: 'text-rose-300', border: 'border-rose-500/40' },
+  teal: { bg: 'bg-teal-500/15', text: 'text-teal-300', border: 'border-teal-500/40' },
+};
+
+function generateCodeExplanation(
+  topic: TopicItem,
+  lang: 'python' | 'cpp' | 'java',
+  rawCode: string
+): CodeExplainerBlock[] {
+  const normId = (topic.id || '').toLowerCase();
+  const normTitle = (topic.title || '').toLowerCase();
+  const tc = getTc(topic);
+  const sc = getSc(topic);
+  const cleanTitle = toTitleCase(topic.title);
+
+  // 1. TWO SUM SPECIFIC CURATION
+  if (normId.includes('two-sum') || normTitle.includes('two sum')) {
+    if (lang === 'python') {
+      return [
+        {
+          id: 'ts-py-1',
+          lineNumberLabel: 'Line 1',
+          lines: [1],
+          codeSnippet: 'def two_sum(nums, target):',
+          roleTag: 'Function Signature',
+          tagColor: 'blue',
+          title: 'Entry Point & Parameter Binding',
+          explanation:
+            'Declares the function taking an array of integers nums and target sum target. We seek two distinct indices whose values sum to target.',
+          complexityImpact: 'O(1) Space Bound',
+          spokenLecture: 'We define two sum taking the array nums and the integer target value.',
+        },
+        {
+          id: 'ts-py-2',
+          lineNumberLabel: 'Line 2',
+          lines: [2],
+          codeSnippet: '    seen = {}',
+          roleTag: 'Hash Map Allocation',
+          tagColor: 'purple',
+          title: 'Constant-Time Hash Map Allocation',
+          explanation:
+            'Initializes an empty dictionary seen to store each visited number as key and its array index as value. This enables amortized O(1) complement lookup, avoiding an O(n^2) nested search.',
+          complexityImpact: 'O(n) Space Invariant',
+          spokenLecture:
+            'Line two initializes an empty hash map called seen. This will store each visited number and its index, providing instant constant time lookup.',
+        },
+        {
+          id: 'ts-py-3',
+          lineNumberLabel: 'Line 3',
+          lines: [3],
+          codeSnippet: '    for i, num in enumerate(nums):',
+          roleTag: 'Linear Traversal',
+          tagColor: 'cyan',
+          title: 'Single-Pass Linear Array Scan',
+          explanation:
+            'Iterates through nums with index i and element num. Traversing in a single forward pass ensures optimal O(n) total runtime.',
+          complexityImpact: 'O(n) Time Bound',
+          spokenLecture:
+            'In line three, we traverse through the array in a single linear pass using enumerate to track both the current element and its index.',
+        },
+        {
+          id: 'ts-py-4',
+          lineNumberLabel: 'Line 4',
+          lines: [4],
+          codeSnippet: '        diff = target - num',
+          roleTag: 'Complement Math',
+          tagColor: 'amber',
+          title: 'Target Complement Calculation',
+          explanation:
+            'Computes the exact complement diff = target - num needed to reach target. If this difference was previously seen, we have discovered the solution pair.',
+          complexityImpact: 'O(1) Arithmetic',
+          spokenLecture:
+            'Line four calculates diff as target minus current number. This is the exact complement we need to complete the sum.',
+        },
+        {
+          id: 'ts-py-5',
+          lineNumberLabel: 'Lines 5-6',
+          lines: [5, 6],
+          codeSnippet: '        if diff in seen:\n            return [seen[diff], i]',
+          roleTag: 'Match & Early Return',
+          tagColor: 'emerald',
+          title: 'O(1) Verification & Solution Return',
+          explanation:
+            'Performs an amortized O(1) lookup for diff in seen. When found, immediately returns the stored index seen[diff] and current index i.',
+          complexityImpact: 'O(1) Map Lookup',
+          spokenLecture:
+            'Lines five and six check whether the complement already exists in our seen table. If it does, we immediately return both indices!',
+        },
+        {
+          id: 'ts-py-6',
+          lineNumberLabel: 'Line 7',
+          lines: [7],
+          codeSnippet: '        seen[num] = i',
+          roleTag: 'State Caching',
+          tagColor: 'teal',
+          title: 'Record Visited Element into Map',
+          explanation:
+            'If the complement is not yet found, records current num and index i into seen so subsequent elements can match against it.',
+          complexityImpact: 'O(1) Hash Insert',
+          spokenLecture:
+            'Line seven records the current element and its index into seen, making it available as a complement for future numbers.',
+        },
+        {
+          id: 'ts-py-7',
+          lineNumberLabel: 'Line 8',
+          lines: [8],
+          codeSnippet: '    return []',
+          roleTag: 'Fallback Sentinel',
+          tagColor: 'rose',
+          title: 'No-Pair Fallback Sentinel',
+          explanation:
+            'Returns an empty list as a defensive sentinel if no two numbers sum to target after the full scan.',
+          complexityImpact: 'O(1) Exit',
+          spokenLecture:
+            'Finally in line eight, if no pair satisfies the sum after scanning all numbers, we return an empty list.',
+        },
+      ];
+    } else if (lang === 'cpp') {
+      return [
+        {
+          id: 'ts-cpp-1',
+          lineNumberLabel: 'Lines 1-3',
+          lines: [1, 2, 3],
+          codeSnippet: '#include <vector>\n#include <unordered_map>\nusing namespace std;',
+          roleTag: 'Header Inclusions',
+          tagColor: 'blue',
+          title: 'Standard Library Containers',
+          explanation:
+            'Includes std::vector for dynamic arrays and std::unordered_map for hash table lookups with average O(1) complexity.',
+          complexityImpact: 'Compile-Time Header',
+          spokenLecture:
+            'We include the vector and unordered map headers from the C++ standard library.',
+        },
+        {
+          id: 'ts-cpp-2',
+          lineNumberLabel: 'Line 5',
+          lines: [5],
+          codeSnippet: 'vector<int> twoSum(vector<int>& nums, int target) {',
+          roleTag: 'Function Signature',
+          tagColor: 'blue',
+          title: 'Function Definition & Pass-By-Reference',
+          explanation:
+            'Defines twoSum accepting nums by reference (vector<int>&) to avoid an expensive O(n) array copy.',
+          complexityImpact: 'O(1) Memory Pass',
+          spokenLecture:
+            'We define twoSum passing the vector by reference to avoid copying overhead.',
+        },
+        {
+          id: 'ts-cpp-3',
+          lineNumberLabel: 'Line 6',
+          lines: [6],
+          codeSnippet: '    unordered_map<int, int> seen;',
+          roleTag: 'Hash Map Allocation',
+          tagColor: 'purple',
+          title: 'O(1) Unordered Map Instantiation',
+          explanation:
+            'Instantiates an unordered_map hashing integers to their corresponding array indices with O(1) average lookup and insertion.',
+          complexityImpact: 'O(n) Space Invariant',
+          spokenLecture:
+            'Line six instantiates an unordered map seen to store visited values and their indices.',
+        },
+        {
+          id: 'ts-cpp-4',
+          lineNumberLabel: 'Line 7',
+          lines: [7],
+          codeSnippet: '    for (int i = 0; i < nums.size(); i++) {',
+          roleTag: 'Linear Traversal',
+          tagColor: 'cyan',
+          title: 'Single-Pass For Loop with Index',
+          explanation: 'Traverses each index i from 0 up to nums.size() - 1 in linear time.',
+          complexityImpact: 'O(n) Iterations',
+          spokenLecture:
+            'Line seven loops across every index of the vector in a single linear pass.',
+        },
+        {
+          id: 'ts-cpp-5',
+          lineNumberLabel: 'Line 8',
+          lines: [8],
+          codeSnippet: '        int diff = target - nums[i];',
+          roleTag: 'Complement Math',
+          tagColor: 'amber',
+          title: 'Calculate Arithmetic Difference',
+          explanation:
+            'Calculates diff = target - nums[i], the exact complement required to reach the target sum.',
+          complexityImpact: 'O(1) Arithmetic',
+          spokenLecture:
+            'Line eight computes the required complement diff as target minus nums at index i.',
+        },
+        {
+          id: 'ts-cpp-6',
+          lineNumberLabel: 'Line 9',
+          lines: [9],
+          codeSnippet: '        if (seen.count(diff)) return {seen[diff], i};',
+          roleTag: 'Match & Early Return',
+          tagColor: 'emerald',
+          title: 'O(1) Map Lookup & Vector Return',
+          explanation:
+            'seen.count(diff) performs an amortized O(1) hash table lookup. If found, returns {seen[diff], i} immediately.',
+          complexityImpact: 'O(1) Map Lookup',
+          spokenLecture:
+            'Line nine checks if seen contains the complement. If yes, it immediately returns both indices.',
+        },
+        {
+          id: 'ts-cpp-7',
+          lineNumberLabel: 'Line 10',
+          lines: [10],
+          codeSnippet: '        seen[nums[i]] = i;',
+          roleTag: 'State Caching',
+          tagColor: 'teal',
+          title: 'Hash Map Key-Value Store',
+          explanation: 'Inserts key nums[i] with value i into the map for future lookups.',
+          complexityImpact: 'O(1) Hash Insertion',
+          spokenLecture:
+            'Line ten stores the current number and index in seen for subsequent iterations.',
+        },
+        {
+          id: 'ts-cpp-8',
+          lineNumberLabel: 'Line 12',
+          lines: [12],
+          codeSnippet: '    return {};',
+          roleTag: 'Fallback Sentinel',
+          tagColor: 'rose',
+          title: 'Empty Vector Fallback',
+          explanation: 'Returns an empty vector {} if no matching pair exists.',
+          complexityImpact: 'O(1) Exit',
+          spokenLecture: 'Line twelve returns an empty vector if no pair sums to target.',
+        },
+      ];
+    } else {
+      // Java
+      return [
+        {
+          id: 'ts-java-1',
+          lineNumberLabel: 'Lines 1-2',
+          lines: [1, 2],
+          codeSnippet: 'import java.util.*;\npublic class TwoSum {',
+          roleTag: 'Class Definition',
+          tagColor: 'blue',
+          title: 'Package Imports & Class Declaration',
+          explanation:
+            'Imports Java utilities (Map, HashMap) and defines the public class container.',
+          complexityImpact: 'Standard Java Boilerplate',
+          spokenLecture: 'We import Java collections and declare the TwoSum class.',
+        },
+        {
+          id: 'ts-java-2',
+          lineNumberLabel: 'Line 3',
+          lines: [3],
+          codeSnippet: '    public static int[] twoSum(int[] nums, int target) {',
+          roleTag: 'Function Signature',
+          tagColor: 'blue',
+          title: 'Method Signature with Return Array',
+          explanation:
+            'Static method returning an array of two integers representing the solution indices.',
+          complexityImpact: 'O(1) Space',
+          spokenLecture:
+            'Line three declares the static twoSum method returning an array of integer indices.',
+        },
+        {
+          id: 'ts-java-3',
+          lineNumberLabel: 'Line 4',
+          lines: [4],
+          codeSnippet: '        Map<Integer, Integer> seen = new HashMap<>();',
+          roleTag: 'Hash Map Allocation',
+          tagColor: 'purple',
+          title: 'Java HashMap Instantiation',
+          explanation:
+            'Allocates a HashMap<Integer, Integer> with O(1) average lookup and insertion overhead.',
+          complexityImpact: 'O(n) Space Invariant',
+          spokenLecture:
+            'Line four instantiates a HashMap seen to record visited elements and their positions.',
+        },
+        {
+          id: 'ts-java-4',
+          lineNumberLabel: 'Line 5',
+          lines: [5],
+          codeSnippet: '        for (int i = 0; i < nums.length; i++) {',
+          roleTag: 'Linear Traversal',
+          tagColor: 'cyan',
+          title: 'Array Iteration Loop',
+          explanation: 'Iterates through the primitive array from index 0 to nums.length - 1.',
+          complexityImpact: 'O(n) Time Bound',
+          spokenLecture: 'Line five iterates through each element of the nums array.',
+        },
+        {
+          id: 'ts-java-5',
+          lineNumberLabel: 'Line 6',
+          lines: [6],
+          codeSnippet: '            int diff = target - nums[i];',
+          roleTag: 'Complement Math',
+          tagColor: 'amber',
+          title: 'Calculate Complement Target',
+          explanation: 'Calculates diff = target - nums[i], the required partner summand.',
+          complexityImpact: 'O(1) Arithmetic',
+          spokenLecture:
+            'Line six calculates the complement diff by subtracting the current element from target.',
+        },
+        {
+          id: 'ts-java-6',
+          lineNumberLabel: 'Line 7',
+          lines: [7],
+          codeSnippet:
+            '            if (seen.containsKey(diff)) return new int[]{seen.get(diff), i};',
+          roleTag: 'Match & Early Return',
+          tagColor: 'emerald',
+          title: 'O(1) Lookup & Array Instantiation',
+          explanation:
+            'seen.containsKey(diff) checks presence in O(1) time and returns new int[]{seen.get(diff), i} immediately.',
+          complexityImpact: 'O(1) Hash Lookup',
+          spokenLecture:
+            'Line seven checks containsKey. If found, it creates and returns an integer array with both indices.',
+        },
+        {
+          id: 'ts-java-7',
+          lineNumberLabel: 'Line 8',
+          lines: [8],
+          codeSnippet: '            seen.put(nums[i], i);',
+          roleTag: 'State Caching',
+          tagColor: 'teal',
+          title: 'Cache Index in Map',
+          explanation: 'Inserts key nums[i] and index i into the map via seen.put().',
+          complexityImpact: 'O(1) Put Operation',
+          spokenLecture:
+            'Line eight puts the visited number and its index into the map for later elements.',
+        },
+        {
+          id: 'ts-java-8',
+          lineNumberLabel: 'Line 10',
+          lines: [10],
+          codeSnippet: '        return new int[]{};',
+          roleTag: 'Fallback Sentinel',
+          tagColor: 'rose',
+          title: 'Empty Array Return',
+          explanation: 'Returns an empty integer array if no two elements satisfy the sum.',
+          complexityImpact: 'O(1) Exit',
+          spokenLecture: 'Line ten returns an empty array if no solution exists.',
+        },
+      ];
+    }
+  }
+
+  // 2. UNIVERSAL SYNTACTIC BLOCK PARSER FOR ALL 175+ TOPICS
+  const rawLines = rawCode.split('\n');
+  const blocks: CodeExplainerBlock[] = [];
+
+  let i = 0;
+  while (i < rawLines.length) {
+    const line = rawLines[i];
+    const trimmed = line.trim();
+    const lineNum = i + 1;
+
+    if (!trimmed) {
+      i++;
+      continue;
+    }
+
+    // Module imports or includes
+    if (
+      trimmed.startsWith('import ') ||
+      trimmed.startsWith('#include') ||
+      trimmed.startsWith('using namespace')
+    ) {
+      const startLine = lineNum;
+      const groupLines = [startLine];
+      let snippet = line;
+      while (
+        i + 1 < rawLines.length &&
+        (rawLines[i + 1].trim().startsWith('import ') ||
+          rawLines[i + 1].trim().startsWith('#include') ||
+          rawLines[i + 1].trim().startsWith('using namespace'))
+      ) {
+        i++;
+        groupLines.push(i + 1);
+        snippet += '\n' + rawLines[i];
+      }
+      blocks.push({
+        id: `blk-${startLine}`,
+        lineNumberLabel:
+          groupLines.length === 1
+            ? `Line ${startLine}`
+            : `Lines ${startLine}-${groupLines[groupLines.length - 1]}`,
+        lines: groupLines,
+        codeSnippet: snippet,
+        roleTag: 'Library Inclusions',
+        tagColor: 'blue',
+        title: 'Module & Header Declarations',
+        explanation: `Imports foundational data structures and standard utilities required for ${cleanTitle}.`,
+        complexityImpact: 'Compile-Time Header',
+        spokenLecture:
+          'We start by importing the necessary standard libraries and data structures.',
+      });
+      i++;
+      continue;
+    }
+
+    // Function signature or class declaration
+    if (
+      trimmed.startsWith('def ') ||
+      trimmed.startsWith('class ') ||
+      trimmed.startsWith('public class ') ||
+      trimmed.includes(' twoSum(') ||
+      trimmed.includes(' binarySearch(') ||
+      (trimmed.includes('(') &&
+        trimmed.endsWith('{') &&
+        !trimmed.startsWith('if') &&
+        !trimmed.startsWith('for') &&
+        !trimmed.startsWith('while'))
+    ) {
+      blocks.push({
+        id: `blk-${lineNum}`,
+        lineNumberLabel: `Line ${lineNum}`,
+        lines: [lineNum],
+        codeSnippet: line,
+        roleTag: trimmed.startsWith('class') ? 'Class Definition' : 'Function Signature',
+        tagColor: 'blue',
+        title: trimmed.startsWith('class') ? 'Class Declaration' : 'Function Interface & Contract',
+        explanation: `Establishes the algorithmic signature for ${cleanTitle}, binding input parameters and formal types.`,
+        complexityImpact: 'O(1) Entry',
+        spokenLecture: `Here we define the function interface for ${cleanTitle}, accepting input arguments.`,
+      });
+      i++;
+      continue;
+    }
+
+    // Loop traversals
+    if (
+      trimmed.startsWith('for ') ||
+      trimmed.startsWith('for(') ||
+      trimmed.startsWith('while ') ||
+      trimmed.startsWith('while(')
+    ) {
+      blocks.push({
+        id: `blk-${lineNum}`,
+        lineNumberLabel: `Line ${lineNum}`,
+        lines: [lineNum],
+        codeSnippet: line,
+        roleTag: 'Iterative Traversal',
+        tagColor: 'cyan',
+        title: 'Loop Traversal & Invariant Guard',
+        explanation: `Controls iteration across the dataset. Advances pointers or indices while maintaining the running state invariant bounded by ${tc}.`,
+        complexityImpact: `${tc} Traversal Bound`,
+        spokenLecture: `Line ${lineNum} initiates the loop traversal, processing elements while preserving our invariant.`,
+      });
+      i++;
+      continue;
+    }
+
+    // Conditionals and early returns
+    if (
+      trimmed.startsWith('if ') ||
+      trimmed.startsWith('if(') ||
+      trimmed.startsWith('elif ') ||
+      trimmed.startsWith('else if') ||
+      trimmed.startsWith('else:') ||
+      trimmed.startsWith('else {') ||
+      trimmed === 'else'
+    ) {
+      const isReturn = trimmed.includes('return');
+      blocks.push({
+        id: `blk-${lineNum}`,
+        lineNumberLabel: `Line ${lineNum}`,
+        lines: [lineNum],
+        codeSnippet: line,
+        roleTag: isReturn ? 'Invariant Match & Return' : 'Branch Condition',
+        tagColor: isReturn ? 'emerald' : 'amber',
+        title: isReturn ? 'Invariant Check & Early Termination' : 'Invariant Evaluation Branch',
+        explanation: isReturn
+          ? `Evaluates condition: when verified, immediately returns optimal result in O(1) time.`
+          : `Evaluates conditional invariant to prune branch or direct algorithm control flow.`,
+        complexityImpact: isReturn ? 'O(1) Verified Exit' : 'O(1) Branch Evaluation',
+        spokenLecture: isReturn
+          ? `Line ${lineNum} verifies our invariant condition. When true, it immediately returns the solution!`
+          : `Line ${lineNum} tests our condition to decide the next algorithmic transition.`,
+      });
+      i++;
+      continue;
+    }
+
+    // Return statements
+    if (trimmed.startsWith('return ') || trimmed.startsWith('return;') || trimmed === 'return') {
+      blocks.push({
+        id: `blk-${lineNum}`,
+        lineNumberLabel: `Line ${lineNum}`,
+        lines: [lineNum],
+        codeSnippet: line,
+        roleTag: 'Result Finalization',
+        tagColor: 'emerald',
+        title: 'Algorithm Termination & Return Value',
+        explanation: `Returns computed output with overall time complexity ${tc} and auxiliary space ${sc}.`,
+        complexityImpact: `${tc} Time / ${sc} Space`,
+        spokenLecture: `Line ${lineNum} finalizes computation and returns the optimal result.`,
+      });
+      i++;
+      continue;
+    }
+
+    // Data structure allocations
+    if (
+      trimmed.includes(' = {}') ||
+      trimmed.includes(' = []') ||
+      trimmed.includes('new HashMap') ||
+      trimmed.includes('new HashSet') ||
+      trimmed.includes('unordered_map') ||
+      trimmed.includes('unordered_set') ||
+      trimmed.includes('vector<') ||
+      trimmed.includes('stack<') ||
+      trimmed.includes('queue<')
+    ) {
+      blocks.push({
+        id: `blk-${lineNum}`,
+        lineNumberLabel: `Line ${lineNum}`,
+        lines: [lineNum],
+        codeSnippet: line,
+        roleTag: 'Data Structure Allocation',
+        tagColor: 'purple',
+        title: 'Memory & State Initialization',
+        explanation: `Allocates dynamic data structure to track visited elements or state invariants with spatial bound ${sc}.`,
+        complexityImpact: `${sc} Memory Overhead`,
+        spokenLecture: `Line ${lineNum} allocates our tracking data structure in memory to record state with space ${sc}.`,
+      });
+      i++;
+      continue;
+    }
+
+    // State mutations / assignments
+    if (
+      trimmed.includes('=') ||
+      trimmed.includes('++') ||
+      trimmed.includes('--') ||
+      trimmed.includes('.push') ||
+      trimmed.includes('.append') ||
+      trimmed.includes('.add')
+    ) {
+      blocks.push({
+        id: `blk-${lineNum}`,
+        lineNumberLabel: `Line ${lineNum}`,
+        lines: [lineNum],
+        codeSnippet: line,
+        roleTag: 'State Transition',
+        tagColor: 'teal',
+        title: 'Variable Mutation & Invariant Update',
+        explanation: `Updates running state variable, adjusting pointers or caching updated bounds.`,
+        complexityImpact: 'O(1) Variable Mutation',
+        spokenLecture: `Line ${lineNum} updates the algorithm's running state variables.`,
+      });
+      i++;
+      continue;
+    }
+
+    // General algorithmic statement
+    blocks.push({
+      id: `blk-${lineNum}`,
+      lineNumberLabel: `Line ${lineNum}`,
+      lines: [lineNum],
+      codeSnippet: line,
+      roleTag: 'Algorithmic Statement',
+      tagColor: 'purple',
+      title: 'Execution Step',
+      explanation: `Executes core computational logic for ${cleanTitle}.`,
+      complexityImpact: 'O(1) Step',
+      spokenLecture: `Line ${lineNum} executes this algorithmic step.`,
+    });
+    i++;
+  }
+
+  if (blocks.length === 0) {
+    blocks.push({
+      id: 'blk-fallback',
+      lineNumberLabel: 'Lines 1-N',
+      lines: [1],
+      codeSnippet: rawCode,
+      roleTag: 'Algorithm Implementation',
+      tagColor: 'cyan',
+      title: `${cleanTitle} Overview`,
+      explanation: `Complete solution implementation for ${cleanTitle} with time complexity ${tc} and space complexity ${sc}.`,
+      complexityImpact: `${tc} Time / ${sc} Space`,
+      spokenLecture: `Here is the complete implementation of ${cleanTitle} achieving optimal time ${tc} and space ${sc}.`,
+    });
+  }
+
+  return blocks;
+}
+
+// ============================================================================
+// COMPONENT: CODE EXPLAINER SECTION
+// ============================================================================
+interface CodeExplainerProps {
+  topic: TopicItem;
+  codeLang: 'python' | 'cpp' | 'java';
+  setCodeLang: (lang: 'python' | 'cpp' | 'java') => void;
+  code: string;
+  isSpeaking: boolean;
+  speakText: (text: string, onEnd?: () => void) => Promise<void>;
+  setSentiment: (sentiment: Sentiment) => void;
+}
+
+function CodeExplainerSection({
+  topic,
+  codeLang,
+  setCodeLang,
+  code,
+  isSpeaking,
+  speakText,
+  setSentiment,
+}: CodeExplainerProps) {
+  const blocks = useMemo(
+    () => generateCodeExplanation(topic, codeLang, code),
+    [topic, codeLang, code]
+  );
+  const [activeBlockIdx, setActiveBlockIdx] = useState<number>(0);
+  const [isPlayingLecture, setIsPlayingLecture] = useState<boolean>(false);
+  const isPlayingLectureRef = useRef<boolean>(false);
+  const activeBlockIdxRef = useRef<number>(0);
+  const codeLines = useMemo(() => code.split('\n'), [code]);
+
+  // Sync ref when activeBlockIdx changes
+  useEffect(() => {
+    activeBlockIdxRef.current = activeBlockIdx;
+  }, [activeBlockIdx]);
+
+  // Reset when topic or code changes
+  useEffect(() => {
+    setActiveBlockIdx(0);
+    activeBlockIdxRef.current = 0;
+    isPlayingLectureRef.current = false;
+    setIsPlayingLecture(false);
+  }, [topic, codeLang, code]);
+
+  // Cleanup speech on unmount
+  useEffect(() => {
+    return () => {
+      isPlayingLectureRef.current = false;
+    };
+  }, []);
+
+  const currentBlock = blocks[activeBlockIdx] || blocks[0];
+
+  // Speak a specific block
+  const handleSpeakBlock = useCallback(
+    (idx: number, onComplete?: () => void) => {
+      const blk = blocks[idx];
+      if (!blk) return;
+      setActiveBlockIdx(idx);
+      activeBlockIdxRef.current = idx;
+
+      // Update sentiment dynamically based on the block's algorithmic role
+      if (blk.roleTag.includes('Return') || blk.roleTag.includes('Match')) {
+        setSentiment('celebrating');
+      } else if (
+        blk.roleTag.includes('Loop') ||
+        blk.roleTag.includes('Invariant') ||
+        blk.roleTag.includes('Branch')
+      ) {
+        setSentiment('thinking');
+      } else {
+        setSentiment('explaining');
+      }
+
+      speakText(blk.spokenLecture, onComplete);
+    },
+    [blocks, setSentiment, speakText]
+  );
+
+  // Play full sequential lecture
+  const startFullLecture = useCallback(() => {
+    isPlayingLectureRef.current = true;
+    setIsPlayingLecture(true);
+
+    const stepToNext = (idx: number) => {
+      if (!isPlayingLectureRef.current || idx >= blocks.length) {
+        isPlayingLectureRef.current = false;
+        setIsPlayingLecture(false);
+        setSentiment('celebrating');
+        return;
+      }
+
+      handleSpeakBlock(idx, () => {
+        if (isPlayingLectureRef.current) {
+          setTimeout(() => {
+            if (isPlayingLectureRef.current) {
+              stepToNext(idx + 1);
+            }
+          }, 600);
+        }
+      });
+    };
+
+    stepToNext(activeBlockIdxRef.current);
+  }, [blocks.length, handleSpeakBlock, setSentiment]);
+
+  // Pause lecture
+  const pauseLecture = useCallback(() => {
+    isPlayingLectureRef.current = false;
+    setIsPlayingLecture(false);
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    setSentiment('idle');
+  }, [setSentiment]);
+
+  // Step controls
+  const handlePrevBlock = useCallback(() => {
+    pauseLecture();
+    const newIdx = Math.max(0, activeBlockIdx - 1);
+    handleSpeakBlock(newIdx);
+  }, [activeBlockIdx, handleSpeakBlock, pauseLecture]);
+
+  const handleNextBlock = useCallback(() => {
+    pauseLecture();
+    const newIdx = Math.min(blocks.length - 1, activeBlockIdx + 1);
+    handleSpeakBlock(newIdx);
+  }, [activeBlockIdx, blocks.length, handleSpeakBlock, pauseLecture]);
+
+  const handleReset = useCallback(() => {
+    pauseLecture();
+    setActiveBlockIdx(0);
+    activeBlockIdxRef.current = 0;
+  }, [pauseLecture]);
+
+  // Check if a 1-based line number belongs to the active block
+  const isLineActive = (lineNum: number) => {
+    return currentBlock.lines.includes(lineNum);
+  };
+
+  // Find block corresponding to a line number
+  const handleLineClick = (lineNum: number) => {
+    pauseLecture();
+    const targetIdx = blocks.findIndex((b) => b.lines.includes(lineNum));
+    if (targetIdx !== -1) {
+      handleSpeakBlock(targetIdx);
+    }
+  };
+
+  return (
+    <div className="h-full flex flex-col rounded-2xl border border-slate-800/80 bg-[#0a0e1a] overflow-hidden shadow-xl">
+      {/* Top Header & Controls */}
+      <div className="h-12 px-4 border-b border-slate-800 flex items-center justify-between shrink-0 bg-[#090d18]">
+        {/* Left: Title & Status */}
+        <div className="flex items-center gap-2 min-w-0">
+          <Sparkles className="w-4 h-4 text-cyan-400 shrink-0" />
+          <span className="text-xs font-semibold text-slate-200 truncate">
+            Code Explainer — {toTitleCase(topic.title)}
+          </span>
+          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-950/60 text-cyan-300 border border-cyan-800/40 hidden sm:inline">
+            Step {activeBlockIdx + 1} of {blocks.length}
+          </span>
+          {isSpeaking && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 animate-pulse">
+              <Volume2 className="w-3 h-3" />
+              <span>Ada Lecturing...</span>
+            </span>
+          )}
+        </div>
+
+        {/* Right: Language Switcher & Playback Bar */}
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Language Selector */}
+          <div className="flex items-center gap-1 bg-slate-900/80 p-0.5 rounded-lg border border-slate-800">
+            {(['python', 'cpp', 'java'] as const).map((lang) => (
+              <button
+                key={lang}
+                onClick={() => setCodeLang(lang)}
+                className={`px-2 py-0.5 rounded text-[10px] font-mono capitalize transition-all ${
+                  codeLang === lang
+                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                    : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                }`}
+              >
+                {lang === 'cpp' ? 'C++' : lang}
+              </button>
+            ))}
+          </div>
+
+          {/* Stepper Buttons */}
+          <div className="flex items-center gap-1">
+            <button
+              onClick={handlePrevBlock}
+              disabled={activeBlockIdx === 0}
+              className="p-1 rounded bg-slate-800/70 hover:bg-slate-700 text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              title="Previous Line / Block"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={handleNextBlock}
+              disabled={activeBlockIdx === blocks.length - 1}
+              className="p-1 rounded bg-slate-800/70 hover:bg-slate-700 text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              title="Next Line / Block"
+            >
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={handleReset}
+              className="p-1 rounded bg-slate-800/70 hover:bg-slate-700 text-slate-400 hover:text-slate-200 transition-all"
+              title="Reset to Beginning"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {/* Walkthrough Play / Pause Button */}
+          <button
+            onClick={isPlayingLecture ? pauseLecture : startFullLecture}
+            className={`px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all shadow-md ${
+              isPlayingLecture
+                ? 'bg-amber-600 hover:bg-amber-500 text-white shadow-amber-500/20 animate-pulse'
+                : 'bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-500 hover:to-teal-500 text-white shadow-cyan-500/20'
+            }`}
+            title={isPlayingLecture ? 'Pause Walkthrough' : 'Play Full Audio Code Walkthrough'}
+          >
+            {isPlayingLecture ? (
+              <>
+                <Pause className="w-3 h-3 fill-current" />
+                <span>Pause</span>
+              </>
+            ) : (
+              <>
+                <Play className="w-3 h-3 fill-current" />
+                <span>Lecture Walkthrough</span>
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* Progress Bar */}
+      <div className="w-full bg-slate-850 h-1 shrink-0 overflow-hidden">
+        <div
+          className="bg-gradient-to-r from-cyan-500 to-teal-400 h-full transition-all duration-300"
+          style={{ width: `${((activeBlockIdx + 1) / blocks.length) * 100}%` }}
+        />
+      </div>
+
+      {/* Main Dual-Pane: Left (Syntax-annotated Code) vs Right (Explanation Cards) */}
+      <div className="flex-1 flex min-h-0 overflow-hidden">
+        {/* LEFT PANE: Full Interactive Code with Line Numbers */}
+        <div className="w-1/2 h-full flex flex-col border-r border-slate-800/80 bg-[#070a14] overflow-hidden">
+          {/* File Tab Header */}
+          <div className="h-8 px-3 border-b border-slate-800 flex items-center justify-between text-[11px] font-mono text-slate-400 bg-[#060913]">
+            <span className="flex items-center gap-1.5 text-cyan-300">
+              <Terminal className="w-3 h-3 text-cyan-400" />
+              <span>
+                solution.{codeLang === 'python' ? 'py' : codeLang === 'cpp' ? 'cpp' : 'java'}
+              </span>
+            </span>
+            <span className="text-[10px] text-slate-500">Click any line to inspect</span>
+          </div>
+
+          {/* Interactive Code Viewer */}
+          <div className="flex-1 overflow-y-auto p-2 font-mono text-xs select-text">
+            {codeLines.map((lineStr, lineIdx) => {
+              const lineNum = lineIdx + 1;
+              const active = isLineActive(lineNum);
+              return (
+                <div
+                  key={lineNum}
+                  onClick={() => handleLineClick(lineNum)}
+                  className={`flex items-start py-1 px-2 rounded cursor-pointer transition-all ${
+                    active
+                      ? 'bg-cyan-500/15 border-l-2 border-cyan-400 text-cyan-200 shadow-sm'
+                      : 'hover:bg-slate-850/50 text-slate-300'
+                  }`}
+                >
+                  {/* Line Gutter */}
+                  <span
+                    className={`w-9 shrink-0 text-right pr-3 select-none text-[11px] flex items-center justify-end gap-1 ${
+                      active ? 'text-cyan-400 font-bold' : 'text-slate-600'
+                    }`}
+                  >
+                    {active && <span className="text-[9px] text-cyan-400 animate-pulse">👉</span>}
+                    <span>{lineNum}</span>
+                  </span>
+
+                  {/* Code Line Content */}
+                  <span className="whitespace-pre flex-1 leading-relaxed">{lineStr}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* RIGHT PANE: Deep Pedagogical Explanation Cards */}
+        <div className="w-1/2 h-full flex flex-col bg-[#080d19] overflow-hidden">
+          {/* Header */}
+          <div className="h-8 px-4 border-b border-slate-800 flex items-center justify-between text-[11px] text-slate-400 bg-[#070b16]">
+            <span className="font-semibold text-slate-200 flex items-center gap-1.5">
+              <BookOpen className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Architectural Breakdown ({blocks.length} Steps)</span>
+            </span>
+            <span className="text-[10px] font-mono text-cyan-400/80">{getTc(topic)}</span>
+          </div>
+
+          {/* Scrollable Explanation Cards */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {blocks.map((block, idx) => {
+              const isActive = idx === activeBlockIdx;
+              const colors = TAG_COLOR_MAP[block.tagColor] || TAG_COLOR_MAP.cyan;
+
+              return (
+                <div
+                  key={block.id}
+                  onClick={() => {
+                    pauseLecture();
+                    handleSpeakBlock(idx);
+                  }}
+                  className={`p-4 rounded-xl border transition-all cursor-pointer ${
+                    isActive
+                      ? 'bg-slate-900/90 border-cyan-500/60 ring-2 ring-cyan-500/20 shadow-xl'
+                      : 'bg-slate-900/40 border-slate-800/70 hover:border-slate-700 hover:bg-slate-900/60'
+                  }`}
+                >
+                  {/* Card Header: Tag, Line, Complexity */}
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider ${colors.bg} ${colors.text} ${colors.border}`}
+                      >
+                        {block.roleTag}
+                      </span>
+                      <span className="text-[10px] font-mono text-slate-400 bg-slate-800 px-2 py-0.5 rounded">
+                        {block.lineNumberLabel}
+                      </span>
+                    </div>
+
+                    <span className="text-[10px] font-mono text-cyan-400 bg-cyan-950/40 border border-cyan-800/40 px-2 py-0.5 rounded">
+                      {block.complexityImpact}
+                    </span>
+                  </div>
+
+                  {/* Title */}
+                  <h4 className="text-sm font-semibold text-white mb-1.5">{block.title}</h4>
+
+                  {/* Code Snippet Box */}
+                  <div className="p-2 rounded-lg bg-[#05070e] border border-slate-800/80 font-mono text-xs text-cyan-300/90 whitespace-pre overflow-x-auto mb-2.5 leading-relaxed">
+                    {block.codeSnippet}
+                  </div>
+
+                  {/* Pedagogical Explanation Text */}
+                  <p className="text-xs text-slate-300 leading-relaxed">{block.explanation}</p>
+
+                  {/* Bottom Action: Listen to Professor Ada */}
+                  <div className="mt-3 pt-2.5 border-t border-slate-800/60 flex items-center justify-between">
+                    <span className="text-[10px] text-slate-500 italic">
+                      Click to activate & focus line
+                    </span>
+
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        pauseLecture();
+                        handleSpeakBlock(idx);
+                      }}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all ${
+                        isActive && isSpeaking
+                          ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                          : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/60'
+                      }`}
+                      title="Listen to Professor Ada speak this line's explanation"
+                    >
+                      <Volume2
+                        className={`w-3.5 h-3.5 ${isActive && isSpeaking ? 'animate-pulse text-cyan-400' : ''}`}
+                      />
+                      <span>{isActive && isSpeaking ? 'Speaking...' : 'Listen to Ada'}</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>

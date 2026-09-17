@@ -122,12 +122,17 @@ Every response MUST be strictly valid JSON matching this exact schema:
    * @param {string} [modelOverride] - 'glm', 'deepseek', or specific model id
    * @returns {Promise<Object>} Structured teaching response
    */
-  async generateTeachingResponse(question, conversationHistory = [], modelOverride = null) {
+  async generateTeachingResponse(
+    question,
+    conversationHistory = [],
+    modelOverride = null,
+    topicContext = null
+  ) {
     const selectedModel = this.resolveModel(modelOverride);
 
     // If no API key provided, generate high-quality deterministic response
     if (!this.apiKey || this.apiKey === 'your_openrouter_api_key_here') {
-      return this.generateFallbackResponse(question, selectedModel);
+      return this.generateFallbackResponse(question, selectedModel, null, topicContext);
     }
 
     // Build messages array
@@ -180,7 +185,8 @@ Every response MUST be strictly valid JSON matching this exact schema:
         return this.generateFallbackResponse(
           question,
           selectedModel,
-          `OpenRouter API returned status ${response.status}`
+          `OpenRouter API returned status ${response.status}`,
+          topicContext
         );
       }
 
@@ -198,7 +204,7 @@ Every response MUST be strictly valid JSON matching this exact schema:
       };
     } catch (err) {
       console.warn(`OpenRouter generation failed (${err.message}): using fallback generator`);
-      return this.generateFallbackResponse(question, selectedModel, err.message);
+      return this.generateFallbackResponse(question, selectedModel, err.message, topicContext);
     }
   }
 
@@ -281,8 +287,185 @@ Every response MUST be strictly valid JSON matching this exact schema:
    * @param {string} model
    * @param {string} [warning]
    */
-  generateFallbackResponse(question, model, warning = null) {
+  generateFallbackResponse(question, model, warning = null, topicContext = null) {
     const q = question.toLowerCase();
+    const activeTopic = (topicContext?.topicTitle || '').toLowerCase();
+    const isCodeLab = Boolean(topicContext?.topicTitle);
+
+    // If within Code Lab studying Two Sum (or query mentions Two Sum):
+    if (activeTopic.includes('two sum') || q.includes('two sum')) {
+      if (q.includes('intuition') || q.includes('explain') || q.includes('how')) {
+        return {
+          explanation:
+            'Two Sum intuition uses a hash map to store each visited number and its index. For each number x, we calculate the required complement target - x and check if it already exists in the map in O(1) time. This avoids an O(n²) brute-force search and achieves optimal O(n) time!',
+          mood: 'explaining',
+          code: {
+            language: 'python',
+            snippet:
+              'def two_sum(nums, target):\n    seen = {}\n    for i, num in enumerate(nums):\n        diff = target - num\n        if diff in seen:\n            return [seen[diff], i]\n        seen[num] = i\n    return []',
+          },
+          visualSequence: {
+            type: 'array',
+            title: 'Two Sum Hash Map Lookup',
+            steps: [
+              { step: 1, action: 'init', description: 'Initialize empty seen hash map' },
+              { step: 2, action: 'compare', description: 'Check complement diff in seen' },
+              { step: 3, action: 'return', description: 'Return [seen[diff], i] on match' },
+            ],
+          },
+          suggestedFollowUps: [
+            'What is the space complexity of Two Sum?',
+            'Can Two Sum be solved with two pointers?',
+            'What are the key edge cases for Two Sum?',
+          ],
+          modelUsed: model,
+          fallbackMode: true,
+          ...(warning ? { warning } : {}),
+        };
+      }
+      if (q.includes('complexity') || q.includes('time') || q.includes('space')) {
+        return {
+          explanation:
+            'For Two Sum, Time Complexity is O(n) because we traverse the array of n elements once, performing amortized O(1) hash map operations. Space Complexity is O(n) to store up to n visited elements in the hash map.',
+          mood: 'explaining',
+          code: {
+            language: 'python',
+            snippet: '# Time Complexity: O(n)\n# Space Complexity: O(n)',
+          },
+          suggestedFollowUps: [
+            'Can we solve it in O(1) space if the array is sorted?',
+            'What are the key edge cases for Two Sum?',
+          ],
+          modelUsed: model,
+          fallbackMode: true,
+          ...(warning ? { warning } : {}),
+        };
+      }
+      if (q.includes('edge') || q.includes('case')) {
+        return {
+          explanation:
+            'Key edge cases for Two Sum:\n1. Duplicate elements (e.g. [3, 3] with target 6).\n2. Negative numbers and zeros (e.g. [-1, -3] with target -4).\n3. Minimum input length (exactly 2 elements).\n4. No valid pair exists (returns empty list).',
+          mood: 'thinking',
+          suggestedFollowUps: [
+            'How does the hash map handle duplicate values?',
+            'Explain intuition for Two Sum',
+          ],
+          modelUsed: model,
+          fallbackMode: true,
+          ...(warning ? { warning } : {}),
+        };
+      }
+      if (q.includes('example') || q.includes('walk')) {
+        return {
+          explanation:
+            'Step-by-step example for Two Sum with nums = [2, 7, 11, 15] and target = 9:\n• At index 0 (val: 2): diff = 9 - 2 = 7. Not in map -> store {2: 0}.\n• At index 1 (val: 7): diff = 9 - 7 = 2. Key 2 is found in map at index 0! Return [0, 1].',
+          mood: 'celebrating',
+          suggestedFollowUps: ['What if target is 18?', 'Explain intuition for Two Sum'],
+          modelUsed: model,
+          fallbackMode: true,
+          ...(warning ? { warning } : {}),
+        };
+      }
+
+      // Generic Code Lab catch-all: if topic is set but no specific match above,
+      // give a contextual answer about the current topic
+      const topicTitle = topicContext?.topicTitle || 'this algorithm';
+      const cleanTopic = topicTitle
+        .replace(/^\d+\.?\s*/, '')
+        .replace(/\s*\(.*?\)/, '')
+        .trim();
+      if (
+        q.includes('intuition') ||
+        q.includes('explain') ||
+        q.includes('how') ||
+        q.includes('what') ||
+        q.includes('why') ||
+        q.includes('approach')
+      ) {
+        return {
+          explanation: `The core intuition for **${cleanTopic}** is to reduce time complexity from brute-force O(n²) by using an efficient data structure — such as a hash map, sorted array, or monotonic stack — to achieve constant-time lookups. This converts a nested search into a single linear pass.`,
+          mood: 'explaining',
+          code: {
+            language: 'python',
+            snippet: `# ${cleanTopic}: efficient approach\n# Use auxiliary data structure for O(1) lookups\nresult = []\nseen = {}\n# Traverse input once, O(n) total`,
+          },
+          suggestedFollowUps: [
+            `What is the time complexity of ${cleanTopic}?`,
+            `Key edge cases for ${cleanTopic}`,
+            `Walk through an example for ${cleanTopic}`,
+          ],
+          modelUsed: model,
+          fallbackMode: true,
+          ...(warning ? { warning } : {}),
+        };
+      }
+      if (
+        q.includes('complex') ||
+        q.includes('time') ||
+        q.includes('space') ||
+        q.includes('big-o') ||
+        q.includes('analyz')
+      ) {
+        return {
+          explanation: `For **${cleanTopic}**: Time Complexity is typically **O(n)** with a hash map or sorted structure, compared to O(n²) brute force. Space Complexity is **O(n)** for auxiliary storage. The single-pass approach is the key to achieving optimal performance.`,
+          mood: 'explaining',
+          code: {
+            language: 'python',
+            snippet: `# Time: O(n) - single pass\n# Space: O(n) - hash map storage`,
+          },
+          suggestedFollowUps: [
+            `Explain the intuition for ${cleanTopic}`,
+            `Walk through an example for ${cleanTopic}`,
+          ],
+          modelUsed: model,
+          fallbackMode: true,
+          ...(warning ? { warning } : {}),
+        };
+      }
+      if (q.includes('edge') || q.includes('case') || q.includes('key')) {
+        return {
+          explanation: `Key edge cases for **${cleanTopic}**:\n1. Empty or single-element inputs.\n2. Duplicate values (e.g. two identical numbers).\n3. Negative numbers and zeros.\n4. No valid answer exists (should return empty or -1).\n5. Maximum constraint inputs for performance testing.`,
+          mood: 'thinking',
+          suggestedFollowUps: [
+            `Explain the intuition for ${cleanTopic}`,
+            `What is the time complexity of ${cleanTopic}?`,
+          ],
+          modelUsed: model,
+          fallbackMode: true,
+          ...(warning ? { warning } : {}),
+        };
+      }
+      if (q.includes('example') || q.includes('walk') || q.includes('step')) {
+        return {
+          explanation: `Step-by-step walkthrough for **${cleanTopic}**:\n• Initialize auxiliary data structure (hash map / set).\n• Traverse input left to right.\n• At each element, check if complement or required value exists in structure.\n• If yes → return result. If no → store current element and continue.`,
+          mood: 'celebrating',
+          suggestedFollowUps: [
+            `Explain the intuition for ${cleanTopic}`,
+            `Key edge cases for ${cleanTopic}`,
+          ],
+          modelUsed: model,
+          fallbackMode: true,
+          ...(warning ? { warning } : {}),
+        };
+      }
+      // General Code Lab fallback for any other query
+      return {
+        explanation: `Great question about **${cleanTopic}**! This problem uses an efficient data structure to transform brute-force O(n²) into an optimal O(n) solution. Check the code in the editor and step through the visualizer to see each operation!`,
+        mood: 'encouraging',
+        code: {
+          language: 'python',
+          snippet: `# ${cleanTopic}: O(n) optimal solution\nseen = {}\nfor i, val in enumerate(nums):\n    complement = target - val\n    if complement in seen:\n        return [seen[complement], i]\n    seen[val] = i`,
+        },
+        suggestedFollowUps: [
+          `Explain the intuition for ${cleanTopic}`,
+          `What is the time complexity of ${cleanTopic}?`,
+          `Key edge cases for ${cleanTopic}`,
+        ],
+        modelUsed: model,
+        fallbackMode: true,
+        ...(warning ? { warning } : {}),
+      };
+    }
 
     // Check for out-of-scope questions (as per PDF requirements)
     const dsaKeywords = [
@@ -297,7 +480,7 @@ Every response MUST be strictly valid JSON matching this exact schema:
       'heap',
       'recursion',
       'dynamic programming',
-      'complexity',
+      'complex',
       'big-o',
       'linked list',
       'bfs',
@@ -320,8 +503,16 @@ Every response MUST be strictly valid JSON matching this exact schema:
       'rotation',
       'quicksort',
       'pivot',
+      'intuition',
+      'edge case',
+      'edge',
+      'example',
+      'analyz',
+      'walk',
+      'step',
+      'approach',
     ];
-    const isDsa = dsaKeywords.some((kw) => q.includes(kw));
+    const isDsa = isCodeLab || dsaKeywords.some((kw) => q.includes(kw));
 
     // If clearly non-DSA topic, steer back to DS&A persona
     if (!isDsa) {
