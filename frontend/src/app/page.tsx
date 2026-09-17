@@ -629,7 +629,7 @@ function getAlgorithmVisualization(topic: TopicItem): AlgorithmVisualModel {
   const tc = getTc(topic);
   const sc = getSc(topic);
   const summary =
-    topic.expectedAnswer?.summary || 'Optimized state transitions across the input structure.';
+    topic.expectedAnswer?.explanation || 'Optimized state transitions across the input structure.';
 
   return {
     type: 'array_general',
@@ -1329,7 +1329,7 @@ export default function Home() {
         if (matchedTopic && matchedTopic.id !== selectedTopic.id) {
           const mTitle = toTitleCase(matchedTopic.title);
           const mSummary =
-            matchedTopic.expectedAnswer?.summary ||
+            matchedTopic.expectedAnswer?.explanation ||
             `Optimal algorithm for ${mTitle}, maintaining key invariants with asymptotic time complexity ${getTc(matchedTopic)}.`;
           // In Code Lab we never switch topics — answer about the current problem
           // Topic switching is reserved for the Ask Ada (QA Arena) section
