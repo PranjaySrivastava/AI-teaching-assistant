@@ -1288,11 +1288,18 @@ export default function Home() {
         if (res.ok) {
           const data = await res.json();
           let exp = data.explanation || data.answer || '';
-          if (data.code?.snippet) {
-            exp += `\n\n\`\`\`${data.code.language || 'python'}\n${data.code.snippet}\n\`\`\``;
+          // If backend returned the generic out-of-scope deflection while we are in
+          // Code Lab (selectedTopic is set), ignore it and fall through to local fallback
+          const isOutOfScopeDeflection =
+            exp.includes('I specialize in Data Structures and Algorithms') ||
+            exp.includes("Let's focus our study on topics like Sorting");
+          if (!isOutOfScopeDeflection) {
+            if (data.code?.snippet) {
+              exp += `\n\n\`\`\`${data.code.language || 'python'}\n${data.code.snippet}\n\`\`\``;
+            }
+            assistantText = exp;
           }
-          assistantText = exp;
-          if (data.mood) mood = data.mood;
+          if (data.mood && !isOutOfScopeDeflection) mood = data.mood;
         }
       } catch {
         // Backend offline or timeout -> use rich contextual pedagogical assistant engine
@@ -1324,9 +1331,11 @@ export default function Home() {
           const mSummary =
             matchedTopic.expectedAnswer?.summary ||
             `Optimal algorithm for ${mTitle}, maintaining key invariants with asymptotic time complexity ${getTc(matchedTopic)}.`;
-          assistantText = `**${mTitle}**:\n${mSummary}\n\n• **Time Complexity**: ${getTc(matchedTopic)}\n• **Space Complexity**: ${getSc(matchedTopic)}\n\n💡 *I've also updated your Code Lab to **${mTitle}** so you can run its code, inspect the line-by-line explainer, and step through the visualizer!*`;
+          // In Code Lab we never switch topics — answer about the current problem
+          // Topic switching is reserved for the Ask Ada (QA Arena) section
+          assistantText = `**${mTitle}**:\n${mSummary}\n\n• **Time Complexity**: ${getTc(matchedTopic)}\n• **Space Complexity**: ${getSc(matchedTopic)}`;
           mood = 'explaining';
-          setSelectedTopicId(matchedTopic.id);
+          // Do NOT call setSelectedTopicId here — Code Lab stays on current topic
         } else if (qLower.includes('dijkstra') || qLower.includes('shortest path')) {
           assistantText = `**Dijkstra's Algorithm** computes single-source shortest paths on graphs with non-negative edge weights. Using a min-priority queue (heap), it runs in **O((V + E) log V)** time by greedily settling the closest vertex and relaxing adjacent incident edges.`;
           mood = 'explaining';
