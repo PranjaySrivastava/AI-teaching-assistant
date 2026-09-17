@@ -1009,7 +1009,7 @@ export default function Home() {
 
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 12000);
+        const timeoutId = setTimeout(() => controller.abort(), 35000);
         const res = await fetch(`${backendUrl}/api/ask`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1271,7 +1271,7 @@ export default function Home() {
 
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 12000);
+        const timeoutId = setTimeout(() => controller.abort(), 35000);
         const res = await fetch(`${backendUrl}/api/ask`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
