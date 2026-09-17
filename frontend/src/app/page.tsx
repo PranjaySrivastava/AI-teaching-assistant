@@ -688,7 +688,9 @@ export default function Home() {
   const allTopics = useMemo<TopicItem[]>(() => rawTopicsData as unknown as TopicItem[], []);
 
   // Navigation State
-  const [currentPage, setCurrentPage] = useState<'dashboard' | 'modules' | 'codelab'>('dashboard');
+  const [currentPage, setCurrentPage] = useState<'dashboard' | 'modules' | 'codelab' | 'qa'>(
+    'dashboard'
+  );
 
   // Topic Selection
   const [selectedTopicId, setSelectedTopicId] = useState<string>(allTopics[0]?.id || '001-two-sum');
@@ -831,7 +833,7 @@ export default function Home() {
 
       // 1. ElevenLabs Cloud Neural Voice (Permanent Voice ID: ZBagl2bR5Xv44f5Xpxn6)
       try {
-        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000';
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5001';
         const ttsRes = await fetch(`${backendUrl}/api/tts`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -948,6 +950,220 @@ export default function Home() {
     }
   }, [selectedTopic, codeLang]);
 
+  // ==================== OPEN DSA Q&A ARENA STATE ====================
+  interface QaMessage {
+    id: string;
+    sender: 'user' | 'assistant';
+    text: string;
+    code?: { language: string; snippet: string } | null;
+    timestamp: string;
+    mood?: Sentiment;
+    suggestedFollowUps?: string[];
+  }
+
+  const [qaMessages, setQaMessages] = useState<QaMessage[]>([
+    {
+      id: 'welcome-qa',
+      sender: 'assistant',
+      text: 'Welcome to the **DSA Open Q&A Arena**! Here you can ask me ANY question across all of computer science and algorithms — from graph shortest paths and dynamic programming to tree balancing, amortized proofs, and system design data structures. Type your inquiry below or tap the microphone to speak!',
+      timestamp: 'Just now',
+      mood: 'encouraging',
+      suggestedFollowUps: [
+        "Explain Dijkstra's shortest path algorithm",
+        'How does QuickSort partitioning work?',
+        'Difference between Memoization and Tabulation in DP',
+        'Compare AVL Trees vs Red-Black Trees',
+        'What is a Trie and why is lookup O(L)?',
+        "How does Floyd's Tortoise and Hare cycle detection work in O(1) space?",
+      ],
+    },
+  ]);
+  const [qaInput, setQaInput] = useState<string>('');
+  const [isSendingQa, setIsSendingQa] = useState<boolean>(false);
+  const [copiedQaCodeId, setCopiedQaCodeId] = useState<string | null>(null);
+  const qaEndRef = useRef<HTMLDivElement>(null);
+
+  // Send Open Q&A Message
+  const handleSendQa = async (textOverride?: string) => {
+    const query = (textOverride || qaInput).trim();
+    if (!query || isSendingQa) return;
+
+    const userMsg: QaMessage = {
+      id: String(Date.now()),
+      sender: 'user',
+      text: query,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    };
+
+    setQaMessages((prev) => [...prev, userMsg]);
+    setQaInput('');
+    setIsSendingQa(true);
+    setSentiment('thinking');
+
+    try {
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5001';
+      let assistantText = '';
+      let codeSnippet: { language: string; snippet: string } | null = null;
+      let mood: Sentiment = 'explaining';
+      let followUps: string[] = [];
+
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 12000);
+        const res = await fetch(`${backendUrl}/api/ask`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            question: query,
+            sessionId: 'qa-arena-session',
+          }),
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+
+        if (res.ok) {
+          const data = await res.json();
+          assistantText = data.explanation || data.answer || '';
+          if (data.code?.snippet) {
+            codeSnippet = data.code;
+          }
+          if (data.mood) mood = data.mood;
+          if (data.suggestedFollowUps) followUps = data.suggestedFollowUps;
+        }
+      } catch {
+        // Backend offline -> fallback
+      }
+
+      // Offline algorithmic knowledge resolver
+      if (!assistantText) {
+        const qLower = query.toLowerCase();
+
+        // 1. Quicksort
+        if (qLower.includes('quicksort') || qLower.includes('quick sort')) {
+          assistantText =
+            '**QuickSort** is an optimal divide-and-conquer sorting algorithm. It picks a "pivot" element and partitions the array into elements smaller than the pivot on the left, and elements greater on the right, then recursively sorts both partitions.';
+          codeSnippet = {
+            language: 'python',
+            snippet:
+              'def quicksort(arr):\n    if len(arr) <= 1:\n        return arr\n    pivot = arr[len(arr) // 2]\n    left = [x for x in arr if x < pivot]\n    middle = [x for x in arr if x == pivot]\n    right = [x for x in arr if x > pivot]\n    return quicksort(left) + middle + quicksort(right)',
+          };
+          followUps = [
+            'What is the worst-case time complexity of QuickSort?',
+            'How does 3-way partitioning prevent quadratic degradation?',
+          ];
+          mood = 'explaining';
+        }
+        // 2. Dijkstra
+        else if (qLower.includes('dijkstra') || qLower.includes('shortest path')) {
+          assistantText =
+            "**Dijkstra's Algorithm** computes single-source shortest paths in weighted graphs with non-negative edge weights. Using a min-priority queue (heap), it greedily extracts the unvisited vertex with minimal provisional distance and relaxes its adjacent edges in **O((V + E) log V)** time.";
+          codeSnippet = {
+            language: 'python',
+            snippet:
+              'import heapq\n\ndef dijkstra(graph, start):\n    distances = {node: float("inf") for node in graph}\n    distances[start] = 0\n    pq = [(0, start)]\n    while pq:\n        curr_dist, u = heapq.heappop(pq)\n        if curr_dist > distances[u]: continue\n        for v, weight in graph[u]:\n            if distances[u] + weight < distances[v]:\n                distances[v] = distances[u] + weight\n                heapq.heappush(pq, (distances[v], v))\n    return distances',
+          };
+          followUps = [
+            'Why does Dijkstra fail with negative edge weights?',
+            'How does Bellman-Ford handle negative weight cycles?',
+          ];
+          mood = 'explaining';
+        }
+        // 3. Dynamic Programming
+        else if (
+          qLower.includes('dynamic programming') ||
+          qLower.includes('memoization') ||
+          qLower.includes('tabulation')
+        ) {
+          assistantText =
+            '**Dynamic Programming (DP)** solves complex problems by breaking them into overlapping subproblems with optimal substructure.\n\n• **Memoization (Top-Down)**: Computes recursively and caches answers in a hash table or array.\n• **Tabulation (Bottom-Up)**: Iteratively populates a table starting directly from base cases without recursion stack overhead.';
+          codeSnippet = {
+            language: 'python',
+            snippet:
+              '# Fibonacci with Memoization (Top-Down)\ndef fib_memo(n, memo={}):\n    if n <= 1: return n\n    if n not in memo:\n        memo[n] = fib_memo(n - 1, memo) + fib_memo(n - 2, memo)\n    return memo[n]\n\n# Fibonacci with Tabulation (Bottom-Up)\ndef fib_tab(n):\n    if n <= 1: return n\n    dp = [0] * (n + 1)\n    dp[1] = 1\n    for i in range(2, n + 1):\n        dp[i] = dp[i-1] + dp[i-2]\n    return dp[n]',
+          };
+          followUps = [
+            'How do you recognize overlapping subproblems?',
+            'What is state space reduction in DP?',
+          ];
+          mood = 'explaining';
+        }
+        // 4. AVL vs Red-Black Trees
+        else if (
+          qLower.includes('avl') ||
+          qLower.includes('red-black') ||
+          qLower.includes('red black')
+        ) {
+          assistantText =
+            '**AVL Trees vs Red-Black Trees**:\n\n• **AVL Trees**: Strictly balanced (balance factor height difference <= 1). Faster lookups with guaranteed lower height, but more frequent rotations during insertions/deletions.\n• **Red-Black Trees**: Loosely balanced (longest path <= 2 * shortest path). Fewer rotations on writes, making them standard for system libraries (e.g. C++ std::map, Java TreeMap).';
+          followUps = [
+            'What are the four rotation cases in AVL trees?',
+            'What are the 5 color invariants of a Red-Black Tree?',
+          ];
+          mood = 'explaining';
+        }
+        // 5. Trie
+        else if (qLower.includes('trie') || qLower.includes('prefix tree')) {
+          assistantText =
+            'A **Trie (Prefix Tree)** is an associative tree data structure where each edge represents a character transition. Searching, insertion, and prefix matching run in optimal **O(L)** time, where L is the query key length, completely independent of the total dictionary size!';
+          codeSnippet = {
+            language: 'python',
+            snippet:
+              'class TrieNode:\n    def __init__(self):\n        self.children = {}\n        self.is_end = False\n\nclass Trie:\n    def __init__(self):\n        self.root = TrieNode()\n    def insert(self, word):\n        curr = self.root\n        for ch in word:\n            if ch not in curr.children: curr.children[ch] = TrieNode()\n            curr = curr.children[ch]\n        curr.is_end = True',
+          };
+          followUps = [
+            'How do you implement autocomplete using a Trie?',
+            'What is the space complexity of a Trie?',
+          ];
+          mood = 'explaining';
+        }
+        // 6. Floyd's Tortoise & Hare
+        else if (
+          qLower.includes('floyd') ||
+          qLower.includes('tortoise') ||
+          qLower.includes('cycle')
+        ) {
+          assistantText =
+            "**Floyd's Cycle-Finding Algorithm (Tortoise and Hare)** detects cycles in linked lists or sequence mappings using two pointers moving at different speeds: slow advances 1 node per step, fast advances 2 nodes. If a cycle exists, they must meet within O(n) time and O(1) auxiliary space.";
+          codeSnippet = {
+            language: 'python',
+            snippet:
+              'def has_cycle(head):\n    slow, fast = head, head\n    while fast and fast.next:\n        slow = slow.next\n        fast = fast.next.next\n        if slow == fast: return True\n    return False',
+          };
+          followUps = [
+            'How do you find the starting node of the cycle?',
+            'Why is fast pointer speed 2 optimal?',
+          ];
+          mood = 'explaining';
+        }
+        // Generic fallback for any other question
+        else {
+          assistantText = `Regarding **"${query}"**: This is a classic question in data structures and algorithmic design. The key is to analyze the underlying state invariant, evaluate the temporal bound O(n) or O(log n), and select the most optimal auxiliary memory structure.`;
+          followUps = [
+            'Can you provide a code example for this?',
+            'What is the space-time tradeoff?',
+          ];
+          mood = 'explaining';
+        }
+      }
+
+      const botMsg: QaMessage = {
+        id: String(Date.now() + 1),
+        sender: 'assistant',
+        text: assistantText,
+        code: codeSnippet,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        mood,
+        suggestedFollowUps: followUps,
+      };
+
+      setQaMessages((prev) => [...prev, botMsg]);
+      setSentiment(mood);
+      speakText(assistantText);
+    } finally {
+      setIsSendingQa(false);
+    }
+  };
+
   // Auto-scroll chat
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -1049,13 +1265,13 @@ export default function Home() {
     setSentiment('thinking');
 
     try {
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000';
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5001';
       let assistantText = '';
       let mood: Sentiment = 'explaining';
 
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 2000);
+        const timeoutId = setTimeout(() => controller.abort(), 12000);
         const res = await fetch(`${backendUrl}/api/ask`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1071,7 +1287,11 @@ export default function Home() {
 
         if (res.ok) {
           const data = await res.json();
-          assistantText = data.explanation || data.answer || '';
+          let exp = data.explanation || data.answer || '';
+          if (data.code?.snippet) {
+            exp += `\n\n\`\`\`${data.code.language || 'python'}\n${data.code.snippet}\n\`\`\``;
+          }
+          assistantText = exp;
           if (data.mood) mood = data.mood;
         }
       } catch {
@@ -1084,7 +1304,56 @@ export default function Home() {
         const tc = getTc(selectedTopic);
         const sc = getSc(selectedTopic);
 
-        if (qLower.includes('intuition') || qLower.includes('explain') || qLower.includes('how')) {
+        // 1. Check if user query matches ANY topic in the 180-problem curriculum
+        const matchedTopic = allTopics.find((t) => {
+          const tId = t.id.toLowerCase().replace(/^\d+-/, '');
+          const tTitle = t.title
+            .toLowerCase()
+            .replace(/^(\d+[\.\s-]*)+/, '')
+            .trim();
+          const cleanKey = tTitle.replace(/algorithm|problem|implementation/gi, '').trim();
+          return (
+            (tId.length > 2 && qLower.includes(tId)) ||
+            (tTitle.length > 2 && qLower.includes(tTitle)) ||
+            (cleanKey.length > 3 && qLower.includes(cleanKey))
+          );
+        });
+
+        if (matchedTopic && matchedTopic.id !== selectedTopic.id) {
+          const mTitle = toTitleCase(matchedTopic.title);
+          const mSummary =
+            matchedTopic.expectedAnswer?.summary ||
+            `Optimal algorithm for ${mTitle}, maintaining key invariants with asymptotic time complexity ${getTc(matchedTopic)}.`;
+          assistantText = `**${mTitle}**:\n${mSummary}\n\n• **Time Complexity**: ${getTc(matchedTopic)}\n• **Space Complexity**: ${getSc(matchedTopic)}\n\n💡 *I've also updated your Code Lab to **${mTitle}** so you can run its code, inspect the line-by-line explainer, and step through the visualizer!*`;
+          mood = 'explaining';
+          setSelectedTopicId(matchedTopic.id);
+        } else if (qLower.includes('dijkstra') || qLower.includes('shortest path')) {
+          assistantText = `**Dijkstra's Algorithm** computes single-source shortest paths on graphs with non-negative edge weights. Using a min-priority queue (heap), it runs in **O((V + E) log V)** time by greedily settling the closest vertex and relaxing adjacent incident edges.`;
+          mood = 'explaining';
+        } else if (
+          qLower.includes('dynamic programming') ||
+          qLower.includes('memoization') ||
+          qLower.includes('tabulation')
+        ) {
+          assistantText = `**Dynamic Programming (DP)** solves complex optimization problems with overlapping subproblems and optimal substructure.\n• **Memoization (Top-Down)**: Computes recursively and caches results in a hash map or array.\n• **Tabulation (Bottom-Up)**: Fills a table iteratively from the base cases up.`;
+          mood = 'explaining';
+        } else if (qLower.includes('trie') || qLower.includes('prefix tree')) {
+          assistantText = `A **Trie (Prefix Tree)** is an associative tree data structure where each node stores character transitions. Insert, search, and prefix matching all operate in optimal **O(L)** time, where L is the query key length, independent of dictionary size.`;
+          mood = 'explaining';
+        } else if (qLower.includes('heap') || qLower.includes('priority queue')) {
+          assistantText = `A **Binary Heap** is a complete binary tree maintaining the heap property (Min-Heap or Max-Heap). It provides **O(1)** peak access, **O(log n)** insertion, and **O(log n)** extraction, making it essential for priority queues.`;
+          mood = 'explaining';
+        } else if (qLower.includes('union find') || qLower.includes('disjoint set')) {
+          assistantText = `**Disjoint Set Union (Union-Find)** tracks partitioned elements. With **path compression** and **union by rank**, find and union operations run in near constant amortized time: **O(α(n))**, where α is the inverse Ackermann function!`;
+          mood = 'explaining';
+        } else if (qLower.includes('graph') || qLower.includes('bfs') || qLower.includes('dfs')) {
+          assistantText = `**Graph Traversals**:\n• **BFS (Breadth-First Search)**: Uses a FIFO queue, traversing level-by-level to find shortest paths on unweighted graphs in **O(V + E)** time.\n• **DFS (Depth-First Search)**: Uses a LIFO stack or recursion, ideal for cycle detection, topological sorting, and path connectivity in **O(V + E)** time.`;
+          mood = 'explaining';
+        } else if (
+          qLower.includes('intuition') ||
+          qLower.includes('explain') ||
+          qLower.includes('how')
+        ) {
           assistantText = `The intuition behind **${cleanTitle}** lies in transforming the brute-force search into an optimal state transition. In the ${CATEGORY_META[selectedTopic.category]?.label || selectedTopic.category} paradigm, we avoid redundant calculations by tracking invariants. This guarantees a time complexity of **${tc}** and auxiliary space of **${sc}**.`;
           mood = 'explaining';
         } else if (
@@ -1129,7 +1398,7 @@ export default function Home() {
       setIsRecording(true);
       setSentiment('thinking');
       try {
-        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000';
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5001';
         await assemblyAiStream.start(backendUrl, {
           onPartialTranscript: (text: string) => {
             setChatInput(text);
@@ -1281,6 +1550,19 @@ export default function Home() {
             <Code2 className="w-5 h-5" />
             <span className="text-[10px] font-medium tracking-tight">Code Lab</span>
           </button>
+
+          <button
+            onClick={() => setCurrentPage('qa')}
+            className={`w-full py-3 rounded-xl flex flex-col items-center justify-center gap-1 transition-all ${
+              currentPage === 'qa'
+                ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 shadow-sm shadow-cyan-500/20'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 border border-transparent'
+            }`}
+            title="Ask Ada — Open DSA Q&A Arena"
+          >
+            <HelpCircle className="w-5 h-5" />
+            <span className="text-[10px] font-medium tracking-tight">Ask Ada</span>
+          </button>
         </nav>
 
         <div className="text-[9px] font-mono text-slate-600 tracking-wider">v2.4</div>
@@ -1397,6 +1679,13 @@ export default function Home() {
                     >
                       <BookOpen className="w-3.5 h-3.5" />
                       <span>Browse All 180 Topics</span>
+                    </button>
+                    <button
+                      onClick={() => setCurrentPage('qa')}
+                      className="px-5 py-2.5 rounded-xl bg-cyan-950/60 hover:bg-cyan-900/60 text-cyan-300 border border-cyan-500/40 text-xs font-semibold flex items-center gap-2 transition-all shadow-md shadow-cyan-500/10"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>Ask Ada (Open Q&A Arena)</span>
                     </button>
                   </div>
                 </div>
@@ -2122,6 +2411,224 @@ export default function Home() {
                       </div>
                     </div>
                   </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ==================== 4. OPEN DSA Q&A ARENA VIEW ==================== */}
+          {currentPage === 'qa' && (
+            <div className="h-full flex bg-[#070b14] overflow-hidden">
+              {/* Left & Center: DSA Open Q&A Canvas */}
+              <div className="flex-1 flex flex-col min-w-0 border-r border-slate-800/80 bg-[#070a14] overflow-hidden">
+                {/* Header */}
+                <div className="h-14 px-6 border-b border-slate-800 flex items-center justify-between shrink-0 bg-[#090e1b]/80 backdrop-blur">
+                  <div>
+                    <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-cyan-400" />
+                      <span>DSA Open Q&A Arena</span>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/30">
+                        Live AI Tutor
+                      </span>
+                    </h2>
+                    <p className="text-[11px] text-slate-400">
+                      Ask Professor Ada any concept, algorithm, proof, or code inquiry across all of
+                      computer science.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs font-mono text-slate-400">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span>Ada Ready</span>
+                  </div>
+                </div>
+
+                {/* Quick Prompts Bar */}
+                <div className="px-6 py-2 border-b border-slate-800/60 bg-slate-950/50 flex items-center gap-2 overflow-x-auto no-scrollbar shrink-0">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider shrink-0">
+                    Popular Inquiries:
+                  </span>
+                  {[
+                    "Explain Dijkstra's shortest path",
+                    'How does QuickSort partitioning work?',
+                    'Memoization vs Tabulation in DP',
+                    'AVL vs Red-Black Trees',
+                    'What is a Trie?',
+                    "Floyd's Tortoise & Hare cycle detection",
+                  ].map((prompt) => (
+                    <button
+                      key={prompt}
+                      onClick={() => handleSendQa(prompt)}
+                      className="px-2.5 py-1 rounded-full text-[11px] font-medium bg-slate-900 border border-slate-700/70 hover:border-cyan-500/40 text-slate-300 hover:text-cyan-300 whitespace-nowrap transition-all shadow-sm"
+                    >
+                      {prompt}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Messages Feed */}
+                <div className="flex-1 overflow-y-auto p-6 space-y-4 min-h-0">
+                  {qaMessages.map((msg) => (
+                    <div key={msg.id} className="space-y-2">
+                      {msg.sender === 'user' ? (
+                        <div className="flex justify-end">
+                          <div className="max-w-[80%] rounded-2xl px-4 py-2.5 text-xs bg-gradient-to-r from-cyan-600 to-blue-600 text-white rounded-br-sm shadow-md">
+                            <div className="font-medium">{msg.text}</div>
+                            <div className="text-[9px] text-cyan-200/70 mt-1 text-right">
+                              {msg.timestamp}
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex justify-start">
+                          <div className="max-w-[90%] rounded-2xl p-4 bg-slate-900/90 border border-slate-800/80 rounded-bl-sm shadow-xl space-y-3">
+                            <div className="flex items-center justify-between border-b border-slate-800/60 pb-2">
+                              <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 rounded-full bg-cyan-500/20 text-cyan-400 flex items-center justify-center text-xs font-bold">
+                                  Ada
+                                </div>
+                                <span className="text-xs font-semibold text-slate-200">
+                                  Professor Ada
+                                </span>
+                              </div>
+                              <span className="text-[10px] text-slate-500">{msg.timestamp}</span>
+                            </div>
+
+                            <div className="text-xs text-slate-200 leading-relaxed whitespace-pre-wrap">
+                              {msg.text}
+                            </div>
+
+                            {msg.code && (
+                              <div className="rounded-xl overflow-hidden border border-slate-800 bg-[#05070e]">
+                                <div className="px-3 py-1 bg-slate-850/80 border-b border-slate-800 flex items-center justify-between text-[10px] font-mono text-slate-400">
+                                  <span className="capitalize">
+                                    {msg.code.language} Implementation
+                                  </span>
+                                  <button
+                                    onClick={() => {
+                                      if (msg.code?.snippet) {
+                                        navigator.clipboard.writeText(msg.code.snippet);
+                                        setCopiedQaCodeId(msg.id);
+                                        setTimeout(() => setCopiedQaCodeId(null), 2000);
+                                      }
+                                    }}
+                                    className="hover:text-slate-200 text-cyan-400 transition-colors"
+                                  >
+                                    {copiedQaCodeId === msg.id ? 'Copied!' : 'Copy Code'}
+                                  </button>
+                                </div>
+                                <div className="p-3 font-mono text-xs text-cyan-300/90 whitespace-pre overflow-x-auto leading-relaxed">
+                                  {msg.code.snippet}
+                                </div>
+                              </div>
+                            )}
+
+                            {msg.suggestedFollowUps && msg.suggestedFollowUps.length > 0 && (
+                              <div className="pt-2 border-t border-slate-800/60 space-y-1.5">
+                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                                  Suggested Follow-ups:
+                                </span>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {msg.suggestedFollowUps.map((fu) => (
+                                    <button
+                                      key={fu}
+                                      onClick={() => handleSendQa(fu)}
+                                      className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-800/70 hover:bg-slate-700 text-slate-300 hover:text-cyan-300 border border-slate-700/50 transition-all"
+                                    >
+                                      {fu}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            <div className="flex justify-end pt-1">
+                              <button
+                                onClick={() => speakText(msg.text)}
+                                className="px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-800/70 hover:bg-slate-700 text-slate-300 border border-slate-700/60 flex items-center gap-1.5 transition-all"
+                                title="Listen to Professor Ada speak this answer"
+                              >
+                                <Volume2 className="w-3.5 h-3.5 text-cyan-400" />
+                                <span>Listen to Ada</span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+
+                  {isSendingQa && (
+                    <div className="flex items-center gap-2 text-xs text-cyan-400 bg-slate-900/60 border border-cyan-500/20 px-3 py-2 rounded-2xl w-fit">
+                      <div className="w-3 h-3 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+                      <span>Professor Ada is analyzing algorithmic principles...</span>
+                    </div>
+                  )}
+                  <div ref={qaEndRef} />
+                </div>
+
+                {/* Q&A Input Bar */}
+                <div className="p-4 border-t border-slate-800 bg-[#090d1b]">
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      handleSendQa();
+                    }}
+                    className="flex items-center gap-3"
+                  >
+                    <button
+                      type="button"
+                      onClick={handleToggleRecord}
+                      className={`p-2.5 rounded-xl border transition-all ${
+                        isRecording
+                          ? 'bg-rose-500 text-white border-rose-400 shadow-lg shadow-rose-500/30 animate-pulse'
+                          : 'bg-slate-900 text-slate-400 hover:text-cyan-400 border-slate-800'
+                      }`}
+                      title={isRecording ? 'Stop Recording' : 'Speak Question (AssemblyAI)'}
+                    >
+                      {isRecording ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                    </button>
+
+                    <input
+                      type="text"
+                      value={qaInput}
+                      onChange={(e) => setQaInput(e.target.value)}
+                      placeholder="Ask any question from DSA (e.g. How does Dijkstra work? What is a Red-Black Tree?)..."
+                      className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition-all"
+                    />
+
+                    <button
+                      type="submit"
+                      disabled={!qaInput.trim() || isSendingQa}
+                      className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 disabled:opacity-40 text-white text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-cyan-500/20 transition-all"
+                    >
+                      <span>Ask Ada</span>
+                      <Send className="w-3.5 h-3.5" />
+                    </button>
+                  </form>
+                </div>
+              </div>
+
+              {/* Right Side: Full-Height 3D Avatar (Professor Ada) */}
+              <div className="w-[390px] xl:w-[420px] h-full border-l border-slate-800/80 bg-[#080d19] flex flex-col shrink-0 overflow-hidden select-none">
+                <div className="h-12 px-4 border-b border-slate-800 flex items-center justify-between bg-[#070b16]">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+                    <span className="text-xs font-bold text-slate-200">Professor Ada</span>
+                  </div>
+                  <span className="text-[10px] font-mono text-cyan-400 uppercase tracking-wider">
+                    {sentiment}
+                  </span>
+                </div>
+
+                <div className="flex-1 p-3 min-h-0 flex flex-col">
+                  <AvatarSection
+                    currentSentiment={sentiment}
+                    isListening={isRecording}
+                    isSpeaking={isSpeaking}
+                    spokenText={spokenText}
+                    onWordBoundaryRef={onWordBoundaryRef}
+                    onSentimentChange={setSentiment}
+                  />
                 </div>
               </div>
             </div>
