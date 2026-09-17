@@ -1291,7 +1291,9 @@ export default function Home() {
           // If backend returned the generic out-of-scope deflection while we are in
           // Code Lab (selectedTopic is set), ignore it and fall through to local fallback
           const isOutOfScopeDeflection =
-            exp.includes('I specialize in Data Structures and Algorithms') ||
+            exp.includes('specialized in Data Structures') ||
+            exp.includes('specialize in Data Structures') ||
+            exp.includes('Data Structures & Algorithms') ||
             exp.includes("Let's focus our study on topics like Sorting");
           if (!isOutOfScopeDeflection) {
             if (data.code?.snippet) {
@@ -2323,17 +2325,29 @@ export default function Home() {
                       {/* Quick Prompt Badges */}
                       <div className="px-3 py-1.5 border-b border-slate-800/50 flex items-center gap-1.5 overflow-x-auto no-scrollbar shrink-0 bg-slate-950/40">
                         {[
-                          'Explain intuition',
-                          'Analyze complexities',
-                          'Key edge cases',
-                          'Walk through example',
-                        ].map((p) => (
+                          {
+                            label: 'Explain intuition',
+                            prompt: `Explain the intuition behind ${selectedTopic.title}`,
+                          },
+                          {
+                            label: 'Analyze complexities',
+                            prompt: `Analyze time and space complexity of ${selectedTopic.title}`,
+                          },
+                          {
+                            label: 'Key edge cases',
+                            prompt: `What are key edge cases for ${selectedTopic.title}?`,
+                          },
+                          {
+                            label: 'Walk through example',
+                            prompt: `Walk through a concrete example of ${selectedTopic.title}`,
+                          },
+                        ].map((item) => (
                           <button
-                            key={p}
-                            onClick={() => handleSendMessage(p)}
+                            key={item.label}
+                            onClick={() => handleSendMessage(item.prompt)}
                             className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/60 whitespace-nowrap transition-all"
                           >
-                            {p}
+                            {item.label}
                           </button>
                         ))}
                       </div>
