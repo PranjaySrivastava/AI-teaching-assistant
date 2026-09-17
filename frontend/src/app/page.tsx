@@ -310,47 +310,9 @@ export default function Home() {
   const [isRecording, setIsRecording] = useState<boolean>(false);
   const onWordBoundaryRef = useRef<((word: string) => void) | null>(null);
 
-  // Dynamic Voice Selection & Persona Tuning
-  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
-  const [selectedVoiceURI, setSelectedVoiceURI] = useState<string>('elevenlabs-neural');
-  const [voicePitch, setVoicePitch] = useState<number>(1.0);
+  // Permanent ElevenLabs Neural Voice Configuration (ID: ZBagl2bR5Xv44f5Xpxn6)
+  const ELEVENLABS_VOICE_ID = 'ZBagl2bR5Xv44f5Xpxn6';
   const activeAudioRef = useRef<HTMLAudioElement | null>(null);
-
-  // Load persisted voice from localStorage if present
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    try {
-      const saved = localStorage.getItem('ada_selected_voice');
-      if (saved) {
-        setSelectedVoiceURI(saved);
-      } else {
-        localStorage.setItem('ada_selected_voice', 'elevenlabs-neural');
-      }
-    } catch {
-      // localStorage may be disabled in private mode
-    }
-  }, []);
-
-  // Auto-discover and populate system & browser voices
-  useEffect(() => {
-    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
-
-    const loadVoices = () => {
-      const all = window.speechSynthesis.getVoices();
-      if (all.length === 0) return;
-      const enVoices = all.filter((v) => v.lang.startsWith('en'));
-      const list = enVoices.length > 0 ? enVoices : all;
-      setAvailableVoices(list);
-    };
-
-    loadVoices();
-    window.speechSynthesis.onvoiceschanged = loadVoices;
-    return () => {
-      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-        window.speechSynthesis.onvoiceschanged = null;
-      }
-    };
-  }, []);
 
   // Chat State
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
@@ -399,27 +361,21 @@ export default function Home() {
 
         const utterance = new SpeechSynthesisUtterance(textToSpeak);
         utterance.rate = playbackSpeed === 0.5 ? 0.85 : playbackSpeed === 2 ? 1.25 : 1.0;
-        utterance.pitch = voicePitch;
+        utterance.pitch = 1.0;
 
         const voices = window.speechSynthesis.getVoices();
-        let chosenVoice: SpeechSynthesisVoice | undefined;
-        if (selectedVoiceURI && selectedVoiceURI !== 'elevenlabs-neural') {
-          chosenVoice = voices.find((v) => (v.voiceURI || v.name) === selectedVoiceURI);
-        }
-        if (!chosenVoice) {
-          chosenVoice =
-            voices.find(
-              (v) =>
-                v.lang.startsWith('en') &&
-                (v.name.includes('Natural') ||
-                  v.name.includes('Jenny') ||
-                  v.name.includes('Zira') ||
-                  v.name.includes('Samantha') ||
-                  v.name.includes('Google') ||
-                  v.name.includes('David') ||
-                  v.name.includes('Aria'))
-            ) || voices[0];
-        }
+        const chosenVoice =
+          voices.find(
+            (v) =>
+              v.lang.startsWith('en') &&
+              (v.name.includes('Natural') ||
+                v.name.includes('Jenny') ||
+                v.name.includes('Zira') ||
+                v.name.includes('Samantha') ||
+                v.name.includes('Google') ||
+                v.name.includes('David') ||
+                v.name.includes('Aria'))
+          ) || voices[0];
         if (chosenVoice) utterance.voice = chosenVoice;
 
         utterance.onboundary = (ev) => {
@@ -447,61 +403,59 @@ export default function Home() {
         window.speechSynthesis.speak(utterance);
       };
 
-      // 1. If ElevenLabs Cloud Neural Voice is selected, request high-fidelity audio from /api/tts
-      if (selectedVoiceURI === 'elevenlabs-neural') {
-        try {
-          const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000';
-          const ttsRes = await fetch(`${backendUrl}/api/tts`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: textToSpeak }),
-          });
+      // 1. ElevenLabs Cloud Neural Voice (Permanent Voice ID: ZBagl2bR5Xv44f5Xpxn6)
+      try {
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000';
+        const ttsRes = await fetch(`${backendUrl}/api/tts`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: textToSpeak, voiceId: ELEVENLABS_VOICE_ID }),
+        });
 
-          if (ttsRes.ok) {
-            const ttsData = await ttsRes.json();
-            if (ttsData.audioUrl && ttsData.audioUrl.startsWith('data:audio/')) {
-              const audio = new Audio(ttsData.audioUrl);
-              activeAudioRef.current = audio;
+        if (ttsRes.ok) {
+          const ttsData = await ttsRes.json();
+          if (ttsData.audioUrl && ttsData.audioUrl.startsWith('data:audio/')) {
+            const audio = new Audio(ttsData.audioUrl);
+            activeAudioRef.current = audio;
 
-              const words = textToSpeak.split(/\s+/);
-              let wordIdx = 0;
-              const wordInterval = setInterval(() => {
-                if (wordIdx < words.length && onWordBoundaryRef.current) {
-                  onWordBoundaryRef.current(words[wordIdx]);
-                  wordIdx++;
-                } else {
-                  clearInterval(wordInterval);
-                }
-              }, 250);
-
-              audio.onended = () => {
+            const words = textToSpeak.split(/\s+/);
+            let wordIdx = 0;
+            const wordInterval = setInterval(() => {
+              if (wordIdx < words.length && onWordBoundaryRef.current) {
+                onWordBoundaryRef.current(words[wordIdx]);
+                wordIdx++;
+              } else {
                 clearInterval(wordInterval);
-                activeAudioRef.current = null;
-                setIsSpeaking(false);
-                setSpokenText('');
-                setSentiment('idle');
-                onEnd?.();
-              };
+              }
+            }, 250);
 
-              audio.onerror = () => {
-                clearInterval(wordInterval);
-                activeAudioRef.current = null;
-                fallbackToWebSpeech();
-              };
+            audio.onended = () => {
+              clearInterval(wordInterval);
+              activeAudioRef.current = null;
+              setIsSpeaking(false);
+              setSpokenText('');
+              setSentiment('idle');
+              onEnd?.();
+            };
 
-              await audio.play();
-              return;
-            }
+            audio.onerror = () => {
+              clearInterval(wordInterval);
+              activeAudioRef.current = null;
+              fallbackToWebSpeech();
+            };
+
+            await audio.play();
+            return;
           }
-        } catch {
-          // Backend or network error, fallback cleanly to local Web Speech
         }
+      } catch {
+        // Backend or network error, fallback cleanly to local Web Speech
       }
 
-      // 2. Default/Fallback: Web Speech synthesis
+      // 2. Fallback: Web Speech synthesis
       fallbackToWebSpeech();
     },
-    [isTtsEnabled, playbackSpeed, selectedVoiceURI, voicePitch]
+    [isTtsEnabled, playbackSpeed]
   );
 
   // Sync isPlayingVis ref for async callbacks
@@ -549,33 +503,6 @@ export default function Home() {
       speakText(narration);
     },
     [selectedTopic, speakText]
-  );
-
-  // Handle Voice Switch with Instant Audible Feedback
-  const handleVoiceChange = useCallback(
-    (uri: string) => {
-      setSelectedVoiceURI(uri);
-      if (typeof window !== 'undefined') {
-        try {
-          localStorage.setItem('ada_selected_voice', uri);
-        } catch {
-          // Ignore localStorage errors
-        }
-      }
-      if (uri === 'elevenlabs-neural') {
-        speakText('ElevenLabs Cloud Neural Voice activated. Hello! I am Professor Ada.');
-      } else {
-        const chosen = availableVoices.find((v) => (v.voiceURI || v.name) === uri);
-        const voiceName = chosen
-          ? chosen.name
-              .replace(/Microsoft|Google|Desktop|Online \(Natural\)/gi, '')
-              .replace(/\(.*?\)/g, '')
-              .trim() || chosen.name
-          : 'new voice';
-        speakText(`Voice changed to ${voiceName}. Hello! I am Professor Ada.`);
-      }
-    },
-    [availableVoices, speakText]
   );
 
   // Sync Code Text when topic or language changes
@@ -963,61 +890,19 @@ export default function Home() {
               />
             </div>
 
-            {/* Voice Persona Selector */}
+            {/* Permanent ElevenLabs Voice Badge */}
             {isTtsEnabled && (
-              <div className="flex items-center gap-1.5 bg-slate-900/90 border border-slate-800 rounded-lg px-2.5 py-1 text-xs">
-                <span className="text-[10px] text-slate-500 font-mono hidden lg:inline">
-                  Voice:
-                </span>
-                <select
-                  value={selectedVoiceURI}
-                  onChange={(e) => handleVoiceChange(e.target.value)}
-                  className="bg-transparent text-cyan-300 text-xs font-medium focus:outline-none cursor-pointer max-w-[140px] sm:max-w-[190px] md:max-w-[240px] truncate"
-                  title="Choose speaking voice for Professor Ada"
-                >
-                  <option
-                    value="elevenlabs-neural"
-                    className="bg-slate-900 text-cyan-300 font-semibold"
-                  >
-                    ✨ ElevenLabs Cloud Neural (Ada)
-                  </option>
-                  {availableVoices.map((v) => {
-                    const cleanName =
-                      v.name
-                        .replace(/Microsoft|Google|Desktop|Online \(Natural\)/gi, '')
-                        .replace(/\(.*?\)/g, '')
-                        .trim() || v.name;
-                    return (
-                      <option
-                        key={v.voiceURI || v.name}
-                        value={v.voiceURI || v.name}
-                        className="bg-slate-900 text-slate-200"
-                      >
-                        {cleanName} ({v.lang})
-                      </option>
-                    );
-                  })}
-                </select>
-              </div>
-            )}
-
-            {/* Voice Tone Selector */}
-            {isTtsEnabled && (
-              <select
-                value={voicePitch}
-                onChange={(e) => {
-                  const p = Number(e.target.value);
-                  setVoicePitch(p);
-                  speakText('Pitch adjusted.');
-                }}
-                className="hidden xl:inline-block bg-slate-900/90 text-slate-400 border border-slate-800 text-[11px] rounded-lg px-2 py-1 focus:outline-none cursor-pointer"
-                title="Tone Pitch: Scholarly, Normal, Deeper, or Higher"
+              <div
+                className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900/90 border border-cyan-500/30 text-[11px] text-cyan-300 font-mono shadow-sm"
+                title="Professor Ada ElevenLabs Neural Voice (ID: ZBagl2bR5Xv44f5Xpxn6)"
               >
-                <option value={0.85}>Pitch: 0.85x (Deep)</option>
-                <option value={1.0}>Pitch: 1.0x (Scholarly)</option>
-                <option value={1.15}>Pitch: 1.15x (Bright)</option>
-                <option value={1.3}>Pitch: 1.3x (Higher)</option>
-              </select>
+                <Volume2 className="w-3.5 h-3.5 text-cyan-400" />
+                <span className="hidden sm:inline text-slate-400">Voice:</span>
+                <span className="font-semibold text-cyan-200">ElevenLabs</span>
+                <span className="text-[10px] text-cyan-500/80 hidden md:inline font-mono">
+                  (ZBagl2bR5Xv44f5Xpxn6)
+                </span>
+              </div>
             )}
 
             {/* TTS Toggle */}

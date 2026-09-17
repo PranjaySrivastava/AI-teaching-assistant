@@ -62,7 +62,7 @@ const config = {
   // ElevenLabs Configuration
   elevenLabs: {
     apiKey: process.env.ELEVENLABS_API_KEY || '',
-    voiceId: process.env.ELEVENLABS_VOICE_ID || '21m00Tcm4TlvDq8ikWAM',
+    voiceId: process.env.ELEVENLABS_VOICE_ID || 'ZBagl2bR5Xv44f5Xpxn6',
     modelId: process.env.ELEVENLABS_MODEL_ID || 'eleven_multilingual_v2',
   },
 
