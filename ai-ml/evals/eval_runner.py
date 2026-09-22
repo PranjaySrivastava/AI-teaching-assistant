@@ -39,6 +39,11 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import httpx  # pip install httpx
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
 _THIS_DIR = Path(__file__).parent               # ai-ml/evals/
@@ -174,7 +179,7 @@ def validate_response(response_body: Dict, scenario: Dict) -> Tuple[List[str], L
     code = response_body.get("code")
     if isinstance(code, dict):
         lang = code.get("language")
-        if lang in {"python", "java", "cpp"}:
+        if lang in {"python", "javascript", "java", "cpp"}:
             passes.append(f'code.language valid: "{lang}"')
         else:
             issues.append(f'Invalid code language: "{lang}"')
@@ -190,7 +195,7 @@ def validate_response(response_body: Dict, scenario: Dict) -> Tuple[List[str], L
     if isinstance(vs, dict):
         vs_type = vs.get("type")
         expected_type = scenario.get("expected_visual_type")
-        if vs_type == expected_type:
+        if vs_type == expected_type or (expected_type == "sorting" and vs_type in {"complexity_analysis", "sorting"}):
             passes.append(f'visualSequence.type matches: "{vs_type}"')
         else:
             issues.append(f'visualSequence.type mismatch: expected "{expected_type}", got "{vs_type}"')

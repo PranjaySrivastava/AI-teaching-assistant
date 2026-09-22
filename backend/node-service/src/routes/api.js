@@ -25,7 +25,15 @@ const router = express.Router();
  */
 router.post('/ask', async (req, res) => {
   try {
-    const { question, sessionId = 'default-session', conversationHistory, model } = req.body;
+    const {
+      question,
+      sessionId = 'default-session',
+      conversationHistory,
+      model,
+      topicTitle,
+      topicId,
+      category,
+    } = req.body;
 
     if (!question || typeof question !== 'string' || !question.trim()) {
       return res.status(400).json({ error: 'Question is required' });
@@ -41,7 +49,8 @@ router.post('/ask', async (req, res) => {
     const llmResult = await openRouterService.generateTeachingResponse(
       question.trim(),
       contextHistory,
-      model
+      model,
+      { topicTitle, topicId, category }
     );
 
     const explanation = llmResult.explanation || 'Here is the step-by-step explanation.';
@@ -142,11 +151,11 @@ router.get('/transcribe/token', async (req, res) => {
  */
 router.post('/tts', async (req, res) => {
   try {
-    const { text } = req.body;
+    const { text, voiceId } = req.body;
     if (!text) {
       return res.status(400).json({ error: 'text is required' });
     }
-    const result = await ttsService.synthesize(text);
+    const result = await ttsService.synthesize(text, voiceId);
     return res.status(200).json(result);
   } catch (err) {
     return res.status(500).json({ error: 'TTS synthesis failed', message: err.message });

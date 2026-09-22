@@ -33,6 +33,7 @@ coverage/
 .pytest_cache/
 *.lcov
 .nyc_output/
+ai-ml/evals/results/
 
 # Logs
 logs/

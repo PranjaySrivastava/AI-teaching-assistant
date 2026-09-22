@@ -16,9 +16,10 @@ class TtsService {
   /**
    * Synthesize speech and extract phoneme timing for lip-sync
    * @param {string} text - Spoken explanation text
+   * @param {string} [customVoiceId] - Optional voice ID override
    * @returns {Promise<{ audioUrl: string, phonemeTimings: Array<{ phoneme: string, start: number, end: number }> }>}
    */
-  async synthesize(text) {
+  async synthesize(text, customVoiceId) {
     if (!text || typeof text !== 'string') {
       return { audioUrl: '', phonemeTimings: [] };
     }
@@ -27,10 +28,12 @@ class TtsService {
       return this.generateFallbackTts(text);
     }
 
+    const effectiveVoiceId = customVoiceId || this.voiceId || 'ZBagl2bR5Xv44f5Xpxn6';
+
     try {
       // ElevenLabs API with timestamps endpoint
       const response = await fetch(
-        `https://api.elevenlabs.io/v1/text-to-speech/${this.voiceId}/with-timestamps`,
+        `https://api.elevenlabs.io/v1/text-to-speech/${effectiveVoiceId}/with-timestamps`,
         {
           method: 'POST',
           headers: {
