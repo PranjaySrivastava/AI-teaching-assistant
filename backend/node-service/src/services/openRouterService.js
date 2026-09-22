@@ -179,7 +179,7 @@ Every response MUST be strictly valid JSON matching this exact schema:
             model: modelToAttempt,
             messages,
             temperature: 0.3,
-            max_tokens: 1000,
+            max_tokens: 1500,
             response_format: { type: 'json_object' },
           }),
         });
@@ -217,7 +217,7 @@ Every response MUST be strictly valid JSON matching this exact schema:
   }
 
   /**
-   * Parse LLM response content into strict JSON object
+   * Parse LLM response content into strict JSON object, with recovery for truncated responses
    * @param {string} content
    * @returns {Object}
    */
@@ -246,28 +246,67 @@ Every response MUST be strictly valid JSON matching this exact schema:
       }
     }
 
-    let parsed;
+    let parsed = null;
     try {
       parsed = JSON.parse(jsonTarget);
-    } catch (err) {
+    } catch (_err) {
       // Secondary attempt: extract substring between first '{' and last '}' of entire content
       const fullBraceMatch = cleaned.match(/\{[\s\S]*\}/);
       if (fullBraceMatch) {
         try {
           parsed = JSON.parse(fullBraceMatch[0]);
         } catch (_nestedErr) {
-          throw new Error(`Failed to parse LLM JSON response: ${err.message}`);
+          parsed = null;
         }
-      } else {
-        throw new Error(`No valid JSON found in LLM response: ${err.message}`);
       }
     }
 
-    // Clean explanation from any accidental leaked safety text
+    // If standard JSON parsing failed (e.g. truncated JSON from token ceiling), recover fields via regex
+    if (!parsed) {
+      const explanationMatch = cleaned.match(/"explanation"\s*:\s*"((?:[^"\\]|\\.)*)/i);
+      if (explanationMatch && explanationMatch[1].trim()) {
+        // Unescape JSON string
+        let rawExplanation = explanationMatch[1];
+        try {
+          rawExplanation = JSON.parse(`"${rawExplanation.replace(/\\?$/, '')}"`);
+        } catch (_unescapeErr) {
+          rawExplanation = rawExplanation.replace(/\\"/g, '"').replace(/\\n/g, ' ');
+        }
+
+        const snippetMatch = cleaned.match(/"snippet"\s*:\s*"((?:[^"\\]|\\.)*)/i);
+        let snippet = '# Implementation details';
+        if (snippetMatch) {
+          try {
+            snippet = JSON.parse(`"${snippetMatch[1].replace(/\\?$/, '')}"`);
+          } catch (_sErr) {
+            snippet = snippetMatch[1].replace(/\\"/g, '"').replace(/\\n/g, '\n');
+          }
+        }
+
+        parsed = {
+          explanation: rawExplanation,
+          mood: 'explaining',
+          code: { language: 'python', snippet },
+          visualSequence: { type: 'algorithm_visualization', title: 'Algorithm Steps', steps: [] },
+          suggestedFollowUps: [
+            'What is the time complexity in the worst case?',
+            'Can you explain the intuition behind this approach?',
+          ],
+        };
+      } else {
+        throw new Error('No valid JSON or explanation found in LLM response');
+      }
+    }
+
+    // Clean explanation from any accidental leaked JSON syntax or safety text
     let explanation = parsed.explanation || 'Let us explore this algorithm step by step.';
     explanation = explanation
       .replace(/^(?:User|Response|Assistant|Model)?\s*Safety\s*:[^\n]*\n+/gim, '')
       .replace(/^Safety\s+Assessment\s*:[^\n]*\n+/gim, '')
+      .replace(/^\{\s*"explanation"\s*:\s*"/i, '')
+      .replace(/"\s*,\s*"mood"[\s\S]*$/i, '')
+      .replace(/\\n/g, ' ')
+      .replace(/\\"/g, '"')
       .trim();
 
     // Validate required properties
