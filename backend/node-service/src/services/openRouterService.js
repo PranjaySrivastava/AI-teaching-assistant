@@ -92,14 +92,13 @@ Every response MUST be strictly valid JSON matching this exact schema:
     }
 
     const norm = requestedModel.toLowerCase().trim();
-    if (norm === 'glm' || norm === 'glm-4' || norm === 'glm4') {
+    if (norm === 'glm' || norm === 'glm-4' || norm === 'glm4' || norm.includes('glm')) {
       return this.glmModel;
     }
-    if (norm === 'deepseek' || norm === 'deepseek-chat') {
+    if (norm === 'deepseek' || norm === 'deepseek-chat' || norm.includes('deepseek')) {
       return this.deepseekModel;
     }
 
-    // Direct model string like 'thudm/glm-4-9b-chat' or 'deepseek/deepseek-r1'
     return requestedModel;
   }
 
@@ -156,50 +155,65 @@ Every response MUST be strictly valid JSON matching this exact schema:
       content: question,
     });
 
-    try {
-      const response = await fetch(`${this.baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
-          'HTTP-Referer': this.siteUrl,
-          'X-Title': this.siteName,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: selectedModel,
-          messages,
-          temperature: 0.3,
-          max_tokens: 1500,
-          response_format: { type: 'json_object' },
-        }),
-      });
-
-      if (!response.ok) {
-        const errText = await response.text();
-        console.warn(`OpenRouter API error (${response.status}): ${errText}`);
-        return this.generateFallbackResponse(
-          question,
-          selectedModel,
-          `OpenRouter API returned status ${response.status}`
-        );
-      }
-
-      const result = await response.json();
-      const rawContent = result.choices?.[0]?.message?.content;
-
-      if (!rawContent) {
-        throw new Error('Empty response from OpenRouter');
-      }
-
-      const parsed = this.parseJsonResponse(rawContent);
-      return {
-        ...parsed,
-        modelUsed: selectedModel,
-      };
-    } catch (err) {
-      console.warn(`OpenRouter generation failed (${err.message}): using fallback generator`);
-      return this.generateFallbackResponse(question, selectedModel, err.message);
+    const modelsToTry = [selectedModel];
+    if (
+      selectedModel !== 'openrouter/free' &&
+      selectedModel !== 'meta-llama/llama-3.3-70b-instruct:free'
+    ) {
+      modelsToTry.push('openrouter/free', 'meta-llama/llama-3.3-70b-instruct:free');
     }
+
+    let lastError = null;
+
+    for (const modelToAttempt of modelsToTry) {
+      try {
+        const response = await fetch(`${this.baseUrl}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${this.apiKey}`,
+            'HTTP-Referer': this.siteUrl,
+            'X-Title': this.siteName,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: modelToAttempt,
+            messages,
+            temperature: 0.3,
+            max_tokens: 1000,
+            response_format: { type: 'json_object' },
+          }),
+        });
+
+        if (!response.ok) {
+          const errText = await response.text();
+          console.warn(
+            `OpenRouter API error for model ${modelToAttempt} (${response.status}): ${errText}`
+          );
+          lastError = `OpenRouter API returned status ${response.status}: ${errText}`;
+          // Continue to next fallback model in modelsToTry
+          continue;
+        }
+
+        const result = await response.json();
+        const rawContent = result.choices?.[0]?.message?.content;
+
+        if (!rawContent) {
+          throw new Error(`Empty response from model ${modelToAttempt}`);
+        }
+
+        const parsed = this.parseJsonResponse(rawContent);
+        return {
+          ...parsed,
+          modelUsed: modelToAttempt,
+        };
+      } catch (err) {
+        console.warn(`OpenRouter generation failed on ${modelToAttempt} (${err.message})`);
+        lastError = err.message;
+      }
+    }
+
+    console.warn(`All OpenRouter attempts failed (${lastError}): using deterministic fallback`);
+    return this.generateFallbackResponse(question, selectedModel, lastError);
   }
 
   /**
@@ -214,65 +228,73 @@ Every response MUST be strictly valid JSON matching this exact schema:
 
     let cleaned = content.trim();
 
-    // Remove markdown code fences if present
-    if (cleaned.startsWith('```')) {
-      cleaned = cleaned
-        .replace(/^```(?:json)?\s*/i, '')
-        .replace(/\s*```$/, '')
-        .trim();
-    }
+    // Strip common safety/moderation preamble lines (e.g., from Llama Guard / free tier wrappers)
+    cleaned = cleaned
+      .replace(/^(?:User|Response|Assistant|Model)?\s*Safety\s*:[^\n]*\n+/gim, '')
+      .replace(/^Safety\s+Assessment\s*:[^\n]*\n+/gim, '')
+      .trim();
 
-    try {
-      const parsed = JSON.parse(cleaned);
+    // Try extracting JSON from markdown code blocks first
+    const codeBlockMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+    let jsonTarget = codeBlockMatch ? codeBlockMatch[1].trim() : cleaned;
 
-      // Validate required properties
-      const isOutOfScope = parsed.code === null && parsed.visualSequence === null;
-      return {
-        explanation: parsed.explanation || 'Let us explore this algorithm step by step.',
-        mood: parsed.mood || 'explaining',
-        code: isOutOfScope
-          ? null
-          : parsed.code || {
-              language: 'python',
-              snippet: '# Implementation details coming up',
-            },
-        visualSequence: isOutOfScope
-          ? null
-          : parsed.visualSequence || {
-              type: 'algorithm_visualization',
-              title: 'Algorithm Execution',
-              steps: [],
-            },
-        suggestedFollowUps: Array.isArray(parsed.suggestedFollowUps)
-          ? parsed.suggestedFollowUps.slice(0, 2)
-          : [
-              'What is the time complexity in the worst case?',
-              'Can you explain how the pointers move step by step?',
-            ],
-      };
-    } catch (err) {
-      // If parsing failed, extract JSON substring or return formatted structure
-      const match = cleaned.match(/\{[\s\S]*\}/);
-      if (match) {
-        try {
-          return JSON.parse(match[0]);
-        } catch (_subErr) {
-          // ignore
-        }
+    // If still not clean JSON, extract outer curly braces
+    if (!jsonTarget.startsWith('{')) {
+      const braceMatch = jsonTarget.match(/\{[\s\S]*\}/);
+      if (braceMatch) {
+        jsonTarget = braceMatch[0];
       }
-
-      // Return content as explanation if JSON parsing totally fails
-      return {
-        explanation: cleaned.slice(0, 300),
-        mood: 'explaining',
-        code: { language: 'python', snippet: '# Reference code' },
-        visualSequence: { type: 'algorithm_visualization', title: 'Algorithm Steps', steps: [] },
-        suggestedFollowUps: [
-          'Can you show a visual step-by-step example?',
-          'What is the time complexity in the worst case?',
-        ],
-      };
     }
+
+    let parsed;
+    try {
+      parsed = JSON.parse(jsonTarget);
+    } catch (err) {
+      // Secondary attempt: extract substring between first '{' and last '}' of entire content
+      const fullBraceMatch = cleaned.match(/\{[\s\S]*\}/);
+      if (fullBraceMatch) {
+        try {
+          parsed = JSON.parse(fullBraceMatch[0]);
+        } catch (_nestedErr) {
+          throw new Error(`Failed to parse LLM JSON response: ${err.message}`);
+        }
+      } else {
+        throw new Error(`No valid JSON found in LLM response: ${err.message}`);
+      }
+    }
+
+    // Clean explanation from any accidental leaked safety text
+    let explanation = parsed.explanation || 'Let us explore this algorithm step by step.';
+    explanation = explanation
+      .replace(/^(?:User|Response|Assistant|Model)?\s*Safety\s*:[^\n]*\n+/gim, '')
+      .replace(/^Safety\s+Assessment\s*:[^\n]*\n+/gim, '')
+      .trim();
+
+    // Validate required properties
+    const isOutOfScope = parsed.code === null && parsed.visualSequence === null;
+    return {
+      explanation: explanation || 'Let us explore this algorithm step by step.',
+      mood: parsed.mood || 'explaining',
+      code: isOutOfScope
+        ? null
+        : parsed.code || {
+            language: 'python',
+            snippet: '# Implementation details',
+          },
+      visualSequence: isOutOfScope
+        ? null
+        : parsed.visualSequence || {
+            type: 'algorithm_visualization',
+            title: 'Algorithm Execution',
+            steps: [],
+          },
+      suggestedFollowUps: Array.isArray(parsed.suggestedFollowUps)
+        ? parsed.suggestedFollowUps.slice(0, 2)
+        : [
+            'What is the time complexity in the worst case?',
+            'Can you explain how the pointers move step by step?',
+          ],
+    };
   }
 
   /**
@@ -308,6 +330,14 @@ Every response MUST be strictly valid JSON matching this exact schema:
       'traversal',
       'algorithm',
       'data structure',
+      'anagram',
+      'duplicate',
+      'two sum',
+      'sliding window',
+      'pointer',
+      'string',
+      'matrix',
+      'edge case',
     ];
     const isDsa = dsaKeywords.some((kw) => q.includes(kw));
 

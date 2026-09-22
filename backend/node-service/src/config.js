@@ -16,11 +16,11 @@ const config = {
       process.env.OPENROUTER_SITE_URL ||
       'https://github.com/PranjaySrivastava/AI-teaching-assistant',
     siteName: process.env.OPENROUTER_SITE_NAME || 'AI Teaching Assistant',
-    defaultModel: process.env.OPENROUTER_DEFAULT_MODEL || 'deepseek/deepseek-chat',
+    defaultModel: process.env.OPENROUTER_DEFAULT_MODEL || 'openrouter/free',
     // GLM Models supported via OpenRouter
-    glmModel: process.env.OPENROUTER_GLM_MODEL || 'thudm/glm-4-9b-chat',
+    glmModel: process.env.OPENROUTER_GLM_MODEL || 'openrouter/free',
     // DeepSeek Models supported via OpenRouter
-    deepseekModel: process.env.OPENROUTER_DEEPSEEK_MODEL || 'deepseek/deepseek-chat',
+    deepseekModel: process.env.OPENROUTER_DEEPSEEK_MODEL || 'openrouter/free',
     availableModels: [
       {
         id: 'deepseek/deepseek-chat',
