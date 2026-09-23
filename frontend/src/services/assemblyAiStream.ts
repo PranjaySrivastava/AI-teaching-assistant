@@ -59,17 +59,25 @@ export class AssemblyAiStream {
       token
     )}`;
 
+    let hasOpened = false;
     return new Promise<void>((resolve, reject) => {
       try {
         this.socket = new WebSocket(wsUrl);
 
-        this.socket.onopen = () => {
+        this.socket.onopen = async () => {
+          hasOpened = true;
           this.isStreaming = true;
           callbacks.onStateChange?.(true);
 
           // 4. Start Web Audio streaming pipeline at 16kHz PCM
-          this.startAudioStreaming();
-          resolve();
+          try {
+            await this.startAudioStreaming();
+            resolve();
+          } catch (audioErr) {
+            console.warn('Audio streaming start failed:', audioErr);
+            this.cleanup();
+            reject(audioErr);
+          }
         };
 
         this.socket.onmessage = (event) => {
@@ -98,9 +106,12 @@ export class AssemblyAiStream {
         this.socket.onerror = (err) => {
           console.warn('AssemblyAI WebSocket error:', err);
           const error = new Error('AssemblyAI streaming WebSocket error');
-          callbacks.onError?.(error);
           this.cleanup();
-          reject(error);
+          if (hasOpened) {
+            callbacks.onError?.(error);
+          } else {
+            reject(error);
+          }
         };
 
         this.socket.onclose = () => {
@@ -117,13 +128,24 @@ export class AssemblyAiStream {
   /**
    * Convert audio stream to 16kHz 16-bit PCM and send to WebSocket
    */
-  private startAudioStreaming() {
+  private async startAudioStreaming() {
     if (!this.mediaStream) return;
 
     const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-    this.audioContext = new AudioCtx({ sampleRate: 16000 });
+    try {
+      this.audioContext = new AudioCtx({ sampleRate: 16000 });
+    } catch {
+      this.audioContext = new AudioCtx();
+    }
+
+    if (this.audioContext.state === 'suspended') {
+      try {
+        await this.audioContext.resume();
+      } catch {}
+    }
 
     const source = this.audioContext.createMediaStreamSource(this.mediaStream);
+    const nativeSampleRate = this.audioContext.sampleRate;
     // Buffer size 4096 gives ~256ms chunk latency at 16kHz
     this.processor = this.audioContext.createScriptProcessor(4096, 1, 1);
 
@@ -133,10 +155,23 @@ export class AssemblyAiStream {
       }
 
       const inputData = e.inputBuffer.getChannelData(0);
+
+      // Downsample to 16kHz if audioContext sampleRate is different (e.g. 44100 or 48000)
+      let samples = inputData;
+      if (nativeSampleRate !== 16000) {
+        const ratio = nativeSampleRate / 16000;
+        const newLength = Math.round(inputData.length / ratio);
+        const downsampled = new Float32Array(newLength);
+        for (let i = 0; i < newLength; i++) {
+          downsampled[i] = inputData[Math.floor(i * ratio)];
+        }
+        samples = downsampled;
+      }
+
       // Convert Float32 to 16-bit signed PCM
-      const pcm16 = new Int16Array(inputData.length);
-      for (let i = 0; i < inputData.length; i++) {
-        const s = Math.max(-1, Math.min(1, inputData[i]));
+      const pcm16 = new Int16Array(samples.length);
+      for (let i = 0; i < samples.length; i++) {
+        const s = Math.max(-1, Math.min(1, samples[i]));
         pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
       }
 
