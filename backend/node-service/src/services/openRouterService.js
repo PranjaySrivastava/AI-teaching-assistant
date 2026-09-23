@@ -92,13 +92,14 @@ Every response MUST be strictly valid JSON matching this exact schema:
     }
 
     const norm = requestedModel.toLowerCase().trim();
-    if (norm === 'glm' || norm === 'glm-4' || norm === 'glm4' || norm.includes('glm')) {
+    if (norm === 'glm' || norm === 'glm-4' || norm === 'glm4') {
       return this.glmModel;
     }
-    if (norm === 'deepseek' || norm === 'deepseek-chat' || norm.includes('deepseek')) {
+    if (norm === 'deepseek' || norm === 'deepseek-chat') {
       return this.deepseekModel;
     }
 
+    // Direct model string like 'thudm/glm-4-9b-chat' or 'deepseek/deepseek-r1'
     return requestedModel;
   }
 
@@ -320,7 +321,21 @@ Every response MUST be strictly valid JSON matching this exact schema:
           ],
         };
       } else {
-        throw new Error('No valid JSON or explanation found in LLM response');
+        // Fallback for plain text response without json formatting
+        const plainText = cleaned
+          .replace(/^(?:User|Response|Assistant|Model)?\s*Safety\s*:[^\n]*\n+/gim, '')
+          .replace(/^Safety\s+Assessment\s*:[^\n]*\n+/gim, '')
+          .trim();
+        parsed = {
+          explanation: plainText.slice(0, 300) || 'Let us explore this algorithm step by step.',
+          mood: 'explaining',
+          code: { language: 'python', snippet: '# Reference code' },
+          visualSequence: { type: 'algorithm_visualization', title: 'Algorithm Steps', steps: [] },
+          suggestedFollowUps: [
+            'What is the time complexity in the worst case?',
+            'Can you show a visual step-by-step example?',
+          ],
+        };
       }
     }
 
