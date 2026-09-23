@@ -731,6 +731,7 @@ export default function Home() {
   // Permanent ElevenLabs Neural Voice Configuration (ID: ZBagl2bR5Xv44f5Xpxn6)
   const ELEVENLABS_VOICE_ID = 'ZBagl2bR5Xv44f5Xpxn6';
   const activeAudioRef = useRef<HTMLAudioElement | null>(null);
+  const speechRecognitionRef = useRef<any>(null);
 
   // Chat State
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
@@ -1404,62 +1405,124 @@ export default function Home() {
     }
   };
 
-  // AssemblyAI Voice Recording Handler
-  const handleToggleRecord = async () => {
-    if (isRecording) {
-      assemblyAiStream.stop();
+  // Helper: Start browser-native SpeechRecognition with persistent ref and continuous mode
+  const startWebSpeechRecognition = useCallback(() => {
+    if (
+      typeof window === 'undefined' ||
+      (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window))
+    ) {
+      console.warn('SpeechRecognition is not supported in this browser.');
       setIsRecording(false);
       setSentiment('idle');
-    } else {
+      return;
+    }
+
+    // Stop any existing instance
+    if (speechRecognitionRef.current) {
+      try {
+        speechRecognitionRef.current.abort();
+      } catch {}
+      speechRecognitionRef.current = null;
+    }
+
+    const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const recognizer = new SpeechRec();
+    speechRecognitionRef.current = recognizer;
+
+    recognizer.continuous = true;
+    recognizer.interimResults = true;
+    recognizer.lang = 'en-US';
+
+    recognizer.onstart = () => {
       setIsRecording(true);
       setSentiment('thinking');
-      try {
-        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5001';
-        await assemblyAiStream.start(backendUrl, {
-          onPartialTranscript: (text: string) => {
-            setChatInput(text);
-          },
-          onFinalTranscript: (text: string) => {
-            if (text.trim()) {
-              setChatInput(text);
-              assemblyAiStream.stop();
-              setIsRecording(false);
-              handleSendMessage(text);
-            }
-          },
-          onError: () => {
-            setIsRecording(false);
-            setSentiment('idle');
-          },
-        });
-      } catch {
-        // Fallback to browser SpeechRecognition if available
-        if (
-          typeof window !== 'undefined' &&
-          ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)
-        ) {
-          const SpeechRec =
-            (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-          const recognizer = new SpeechRec();
-          recognizer.continuous = false;
-          recognizer.interimResults = true;
-          recognizer.onresult = (ev: any) => {
-            const transcript = Array.from(ev.results)
-              .map((r: any) => r[0].transcript)
-              .join('');
-            setChatInput(transcript);
-            if (ev.results[0].isFinal) {
-              setIsRecording(false);
-              handleSendMessage(transcript);
-            }
-          };
-          recognizer.onerror = () => setIsRecording(false);
-          recognizer.onend = () => setIsRecording(false);
-          recognizer.start();
+    };
+
+    recognizer.onresult = (ev: any) => {
+      let interim = '';
+      let finalStr = '';
+      for (let i = 0; i < ev.results.length; ++i) {
+        if (ev.results[i].isFinal) {
+          finalStr += ev.results[i][0].transcript;
         } else {
-          setIsRecording(false);
+          interim += ev.results[i][0].transcript;
         }
       }
+      const combined = (finalStr + ' ' + interim).trim();
+      if (combined) {
+        setChatInput(combined);
+      }
+    };
+
+    recognizer.onerror = (event: any) => {
+      console.warn('SpeechRecognition event error:', event.error);
+      if (event.error !== 'no-speech') {
+        setIsRecording(false);
+        setSentiment('idle');
+        speechRecognitionRef.current = null;
+      }
+    };
+
+    recognizer.onend = () => {
+      setIsRecording(false);
+      setSentiment('idle');
+      speechRecognitionRef.current = null;
+    };
+
+    try {
+      recognizer.start();
+    } catch (err) {
+      console.warn('SpeechRecognition start failed:', err);
+      setIsRecording(false);
+      setSentiment('idle');
+      speechRecognitionRef.current = null;
+    }
+  }, []);
+
+  // AssemblyAI Voice Recording Handler with seamless Web Speech fallback
+  const handleToggleRecord = async () => {
+    if (isRecording) {
+      // 1. Stop AssemblyAI stream
+      assemblyAiStream.stop();
+      // 2. Stop browser SpeechRecognition
+      if (speechRecognitionRef.current) {
+        try {
+          speechRecognitionRef.current.stop();
+        } catch {}
+        speechRecognitionRef.current = null;
+      }
+      setIsRecording(false);
+      setSentiment('idle');
+      return;
+    }
+
+    setIsRecording(true);
+    setSentiment('thinking');
+
+    try {
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5001';
+      await assemblyAiStream.start(backendUrl, {
+        onPartialTranscript: (text: string) => {
+          setChatInput(text);
+        },
+        onFinalTranscript: (text: string) => {
+          if (text.trim()) {
+            setChatInput(text);
+            assemblyAiStream.stop();
+            setIsRecording(false);
+            handleSendMessage(text);
+          }
+        },
+        onError: (err: any) => {
+          console.warn('AssemblyAI streaming error, falling back to Web Speech:', err);
+          assemblyAiStream.stop();
+          startWebSpeechRecognition();
+        },
+      });
+    } catch (err) {
+      console.warn('AssemblyAI start failed, falling back to Web Speech:', err);
+      assemblyAiStream.stop();
+      startWebSpeechRecognition();
     }
   };
 
