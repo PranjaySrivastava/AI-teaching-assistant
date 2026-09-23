@@ -54,8 +54,8 @@ export class AssemblyAiStream {
       },
     });
 
-    // 3. Connect to AssemblyAI Real-time WebSocket
-    const wsUrl = `wss://api.assemblyai.com/v2/realtime/ws?sample_rate=16000&token=${encodeURIComponent(
+    // 3. Connect to AssemblyAI Universal Streaming v3 WebSocket
+    const wsUrl = `wss://streaming.assemblyai.com/v3/ws?sample_rate=16000&token=${encodeURIComponent(
       token
     )}`;
 
@@ -75,11 +75,19 @@ export class AssemblyAiStream {
         this.socket.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
-            if (data.message_type === 'PartialTranscript') {
+            // AssemblyAI v3 Universal Streaming format
+            if (data.type === 'Turn') {
+              const text = data.transcript || '';
+              if (data.end_of_turn) {
+                callbacks.onFinalTranscript?.(text);
+              } else {
+                callbacks.onPartialTranscript?.(text);
+              }
+            } else if (data.message_type === 'PartialTranscript') {
               callbacks.onPartialTranscript?.(data.text || '');
             } else if (data.message_type === 'FinalTranscript') {
               callbacks.onFinalTranscript?.(data.text || '');
-            } else if (data.message_type === 'SessionTerminated') {
+            } else if (data.type === 'Termination' || data.message_type === 'SessionTerminated') {
               this.cleanup();
             }
           } catch (err) {
@@ -145,7 +153,7 @@ export class AssemblyAiStream {
   public stop(): void {
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
       try {
-        this.socket.send(JSON.stringify({ terminate_session: true }));
+        this.socket.send(JSON.stringify({ type: 'Terminate' }));
       } catch {}
     }
     this.cleanup();
