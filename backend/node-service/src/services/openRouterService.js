@@ -186,7 +186,6 @@ Every response MUST be strictly valid JSON matching this exact schema:
             messages,
             temperature: 0.3,
             max_tokens: 1500,
-            response_format: { type: 'json_object' },
           }),
         });
 
@@ -203,11 +202,26 @@ Every response MUST be strictly valid JSON matching this exact schema:
         const result = await response.json();
         const rawContent = result.choices?.[0]?.message?.content;
 
-        if (!rawContent) {
+        if (!rawContent || !rawContent.trim() || rawContent.trim() === '{}') {
           throw new Error(`Empty response from model ${modelToAttempt}`);
         }
 
         const parsed = this.parseJsonResponse(rawContent);
+
+        // Reject degenerate or dummy placeholder responses so we fall back to high-quality curated answers
+        const isDegenerate =
+          !parsed ||
+          !parsed.explanation ||
+          parsed.explanation.length < 25 ||
+          parsed.explanation === 'Let us explore this algorithm step by step.' ||
+          (parsed.code && parsed.code.snippet === '# Implementation details');
+
+        if (isDegenerate) {
+          throw new Error(
+            `Model ${modelToAttempt} returned degenerate placeholder: ${rawContent.slice(0, 80)}`
+          );
+        }
+
         return {
           ...parsed,
           modelUsed: modelToAttempt,
@@ -736,7 +750,11 @@ Every response MUST be strictly valid JSON matching this exact schema:
     }
 
     // Group Anagrams (hash map of sorted key → list of words)
-    if (q.includes('group anagram') || q.includes('anagram')) {
+    if (
+      q.includes('group anagram') ||
+      q.includes('group anagrams') ||
+      q.includes('grouping anagram')
+    ) {
       if (q.includes('complex') || q.includes('time') || q.includes('space')) {
         return {
           explanation:
@@ -1400,6 +1418,54 @@ Every response MUST be strictly valid JSON matching this exact schema:
 
     // Valid Anagram
     if (q.includes('valid anagram') || (q.includes('anagram') && !q.includes('group'))) {
+      if (
+        q.includes('complex') ||
+        q.includes('time') ||
+        q.includes('space') ||
+        q.includes('big-o')
+      ) {
+        return {
+          explanation:
+            'Valid Anagram with a frequency array runs in O(n) time — we do one linear pass over string s and one pass over string t. Space complexity is O(1) auxiliary space because the alphabet size is fixed (26 lowercase English letters), regardless of how large the input strings are.',
+          mood: 'explaining',
+          code: {
+            language: 'python',
+            snippet:
+              "# Time: O(n) — two passes of length n\n# Space: O(1) — fixed 26-element array\ndef is_anagram(s: str, t: str) -> bool:\n    if len(s) != len(t): return False\n    count = [0] * 26\n    for c in s: count[ord(c) - ord('a')] += 1\n    for c in t: count[ord(c) - ord('a')] -= 1\n    return all(x == 0 for x in count)",
+          },
+          visualSequence: {
+            type: 'array',
+            title: 'Valid Anagram: Complexity Analysis',
+            steps: [
+              {
+                step: 1,
+                action: 'highlight',
+                description: 'Fixed 26-slot counter array → O(1) space',
+                elements: [0],
+              },
+              {
+                step: 2,
+                action: 'compare',
+                description: 'Linear scan of both strings → O(n) time',
+                elements: [0, 1],
+              },
+              {
+                step: 3,
+                action: 'highlight',
+                description: 'O(1) alphabet check finishes validation',
+                elements: [1],
+              },
+            ],
+          },
+          suggestedFollowUps: [
+            'What if the input contains Unicode characters?',
+            'What are the key edge cases for Valid Anagram?',
+          ],
+          modelUsed: model,
+          fallbackMode: true,
+          ...(warning ? { warning } : {}),
+        };
+      }
       return {
         explanation:
           'Two strings are anagrams if they have identical character frequencies. Count characters of the first string in a 26-slot array, then decrement for the second — if all slots are zero, they match. O(n) time, O(1) space.',

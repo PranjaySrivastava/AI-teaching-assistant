@@ -1288,20 +1288,25 @@ export default function Home() {
         if (res.ok) {
           const data = await res.json();
           let exp = data.explanation || data.answer || '';
-          // If backend returned the generic out-of-scope deflection while we are in
-          // Code Lab (selectedTopic is set), ignore it and fall through to local fallback
+          // If backend returned generic out-of-scope deflection or empty placeholder while in Code Lab,
+          // ignore it and fall through to rich local topic-specific curriculum engine
           const isOutOfScopeDeflection =
             exp.includes('specialized in Data Structures') ||
             exp.includes('specialize in Data Structures') ||
             exp.includes('Data Structures & Algorithms') ||
             exp.includes("Let's focus our study on topics like Sorting");
-          if (!isOutOfScopeDeflection) {
+          const isDegenerate =
+            exp.includes('Let us explore this algorithm step by step') ||
+            exp.length < 20 ||
+            data.code?.snippet === '# Implementation details' ||
+            data.code?.snippet === '# Reference code';
+          if (!isOutOfScopeDeflection && !isDegenerate) {
             if (data.code?.snippet) {
               exp += `\n\n\`\`\`${data.code.language || 'python'}\n${data.code.snippet}\n\`\`\``;
             }
             assistantText = exp;
           }
-          if (data.mood && !isOutOfScopeDeflection) mood = data.mood;
+          if (data.mood && !isOutOfScopeDeflection && !isDegenerate) mood = data.mood;
         }
       } catch {
         // Backend offline or timeout -> use rich contextual pedagogical assistant engine
