@@ -54,48 +54,32 @@ export class AssemblyAiStream {
       },
     });
 
-    // 3. Connect to AssemblyAI Universal Streaming v3 WebSocket
-    const wsUrl = `wss://streaming.assemblyai.com/v3/ws?sample_rate=16000&token=${encodeURIComponent(
+    // 3. Connect to AssemblyAI Real-time WebSocket
+    const wsUrl = `wss://api.assemblyai.com/v2/realtime/ws?sample_rate=16000&token=${encodeURIComponent(
       token
     )}`;
 
-    let hasOpened = false;
     return new Promise<void>((resolve, reject) => {
       try {
         this.socket = new WebSocket(wsUrl);
 
-        this.socket.onopen = async () => {
-          hasOpened = true;
+        this.socket.onopen = () => {
           this.isStreaming = true;
           callbacks.onStateChange?.(true);
 
           // 4. Start Web Audio streaming pipeline at 16kHz PCM
-          try {
-            await this.startAudioStreaming();
-            resolve();
-          } catch (audioErr) {
-            console.warn('Audio streaming start failed:', audioErr);
-            this.cleanup();
-            reject(audioErr);
-          }
+          this.startAudioStreaming();
+          resolve();
         };
 
         this.socket.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
-            // AssemblyAI v3 Universal Streaming format
-            if (data.type === 'Turn') {
-              const text = data.transcript || '';
-              if (data.end_of_turn) {
-                callbacks.onFinalTranscript?.(text);
-              } else {
-                callbacks.onPartialTranscript?.(text);
-              }
-            } else if (data.message_type === 'PartialTranscript') {
+            if (data.message_type === 'PartialTranscript') {
               callbacks.onPartialTranscript?.(data.text || '');
             } else if (data.message_type === 'FinalTranscript') {
               callbacks.onFinalTranscript?.(data.text || '');
-            } else if (data.type === 'Termination' || data.message_type === 'SessionTerminated') {
+            } else if (data.message_type === 'SessionTerminated') {
               this.cleanup();
             }
           } catch (err) {
@@ -106,12 +90,9 @@ export class AssemblyAiStream {
         this.socket.onerror = (err) => {
           console.warn('AssemblyAI WebSocket error:', err);
           const error = new Error('AssemblyAI streaming WebSocket error');
+          callbacks.onError?.(error);
           this.cleanup();
-          if (hasOpened) {
-            callbacks.onError?.(error);
-          } else {
-            reject(error);
-          }
+          reject(error);
         };
 
         this.socket.onclose = () => {
@@ -128,24 +109,13 @@ export class AssemblyAiStream {
   /**
    * Convert audio stream to 16kHz 16-bit PCM and send to WebSocket
    */
-  private async startAudioStreaming() {
+  private startAudioStreaming() {
     if (!this.mediaStream) return;
 
     const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-    try {
-      this.audioContext = new AudioCtx({ sampleRate: 16000 });
-    } catch {
-      this.audioContext = new AudioCtx();
-    }
-
-    if (this.audioContext.state === 'suspended') {
-      try {
-        await this.audioContext.resume();
-      } catch {}
-    }
+    this.audioContext = new AudioCtx({ sampleRate: 16000 });
 
     const source = this.audioContext.createMediaStreamSource(this.mediaStream);
-    const nativeSampleRate = this.audioContext.sampleRate;
     // Buffer size 4096 gives ~256ms chunk latency at 16kHz
     this.processor = this.audioContext.createScriptProcessor(4096, 1, 1);
 
@@ -155,23 +125,10 @@ export class AssemblyAiStream {
       }
 
       const inputData = e.inputBuffer.getChannelData(0);
-
-      // Downsample to 16kHz if audioContext sampleRate is different (e.g. 44100 or 48000)
-      let samples = inputData;
-      if (nativeSampleRate !== 16000) {
-        const ratio = nativeSampleRate / 16000;
-        const newLength = Math.round(inputData.length / ratio);
-        const downsampled = new Float32Array(newLength);
-        for (let i = 0; i < newLength; i++) {
-          downsampled[i] = inputData[Math.floor(i * ratio)];
-        }
-        samples = downsampled;
-      }
-
       // Convert Float32 to 16-bit signed PCM
-      const pcm16 = new Int16Array(samples.length);
-      for (let i = 0; i < samples.length; i++) {
-        const s = Math.max(-1, Math.min(1, samples[i]));
+      const pcm16 = new Int16Array(inputData.length);
+      for (let i = 0; i < inputData.length; i++) {
+        const s = Math.max(-1, Math.min(1, inputData[i]));
         pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
       }
 
@@ -188,7 +145,7 @@ export class AssemblyAiStream {
   public stop(): void {
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
       try {
-        this.socket.send(JSON.stringify({ type: 'Terminate' }));
+        this.socket.send(JSON.stringify({ terminate_session: true }));
       } catch {}
     }
     this.cleanup();
