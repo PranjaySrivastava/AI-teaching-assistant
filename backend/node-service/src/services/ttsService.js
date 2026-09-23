@@ -32,7 +32,7 @@ class TtsService {
 
     try {
       // ElevenLabs API with timestamps endpoint
-      const response = await fetch(
+      let response = await fetch(
         `https://api.elevenlabs.io/v1/text-to-speech/${effectiveVoiceId}/with-timestamps`,
         {
           method: 'POST',
@@ -51,9 +51,36 @@ class TtsService {
         }
       );
 
-      if (!response.ok) {
+      // If community/library voice returns 402 (payment required / free tier restriction), retry with standard default voice (Rachel)
+      if (!response.ok && response.status === 402 && effectiveVoiceId !== '21m00Tcm4TlvDq8ikWAM') {
+        const errBody = await response.text();
         console.warn(
-          `ElevenLabs API error (${response.status}): falling back to procedural phonemes`
+          `ElevenLabs voice ${effectiveVoiceId} returned 402 (${errBody}). Retrying with default premade voice (Rachel)...`
+        );
+        response = await fetch(
+          `https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM/with-timestamps`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'xi-api-key': this.apiKey,
+            },
+            body: JSON.stringify({
+              text,
+              model_id: this.modelId,
+              voice_settings: {
+                stability: 0.5,
+                similarity_boost: 0.75,
+              },
+            }),
+          }
+        );
+      }
+
+      if (!response.ok) {
+        const errorDetail = await response.text();
+        console.warn(
+          `ElevenLabs API error (${response.status}): ${errorDetail}. Falling back to procedural phonemes.`
         );
         return this.generateFallbackTts(text);
       }

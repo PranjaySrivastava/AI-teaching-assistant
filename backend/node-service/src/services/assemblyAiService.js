@@ -64,17 +64,20 @@ class AssemblyAiService {
     }
 
     try {
-      const response = await fetch('https://api.assemblyai.com/v2/realtime/token', {
-        method: 'POST',
-        headers: {
-          authorization: this.apiKey,
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify({ expires_in: 600 }),
-      });
+      // AssemblyAI v3 Universal Streaming token endpoint (GET with query parameter)
+      const response = await fetch(
+        'https://streaming.assemblyai.com/v3/token?expires_in_seconds=480',
+        {
+          method: 'GET',
+          headers: {
+            Authorization: this.apiKey,
+          },
+        }
+      );
 
       if (!response.ok) {
-        throw new Error(`AssemblyAI token error: ${response.status}`);
+        const errText = await response.text();
+        throw new Error(`AssemblyAI token error: ${response.status} - ${errText}`);
       }
 
       return await response.json();
