@@ -161,34 +161,13 @@ Every response MUST be strictly valid JSON matching this exact schema:
       content: question,
     });
 
-    try {
-      const response = await fetch(`${this.baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
-          'HTTP-Referer': this.siteUrl,
-          'X-Title': this.siteName,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: selectedModel,
-          messages,
-          temperature: 0.3,
-          max_tokens: 1500,
-          response_format: { type: 'json_object' },
-        }),
-      });
-
-      if (!response.ok) {
-        const errText = await response.text();
-        console.warn(`OpenRouter API error (${response.status}): ${errText}`);
-        return this.generateFallbackResponse(
-          question,
-          selectedModel,
-          `OpenRouter API returned status ${response.status}`,
-          topicContext
-        );
-      }
+    const modelsToTry = [selectedModel];
+    if (
+      selectedModel !== 'openrouter/free' &&
+      selectedModel !== 'meta-llama/llama-3.3-70b-instruct:free'
+    ) {
+      modelsToTry.push('openrouter/free', 'meta-llama/llama-3.3-70b-instruct:free');
+    }
 
     let lastError = null;
 
@@ -240,7 +219,7 @@ Every response MUST be strictly valid JSON matching this exact schema:
     }
 
     console.warn(`All OpenRouter attempts failed (${lastError}): using deterministic fallback`);
-    return this.generateFallbackResponse(question, selectedModel, lastError);
+    return this.generateFallbackResponse(question, selectedModel, lastError, topicContext);
   }
 
   /**

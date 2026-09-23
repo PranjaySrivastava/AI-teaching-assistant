@@ -64,7 +64,12 @@ wss.on('connection', (ws) => {
         const llmResult = await openRouterService.generateTeachingResponse(
           question,
           history,
-          model
+          model,
+          {
+            topicTitle: data.topicTitle,
+            topicId: data.topicId,
+            category: data.category,
+          }
         );
         const isOutOfScope = llmResult.code === null && llmResult.visualSequence === null;
         const code = isOutOfScope ? null : llmResult.code || { language: 'python', snippet: '' };
