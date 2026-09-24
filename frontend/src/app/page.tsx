@@ -3672,6 +3672,24 @@ function generateCodeExplanation(
       continue;
     }
 
+    // Skip comments and solitary structural braces/punctuation
+    if (
+      trimmed.startsWith('//') ||
+      trimmed.startsWith('#') ||
+      trimmed.startsWith('/*') ||
+      trimmed.startsWith('*') ||
+      trimmed.startsWith('*/') ||
+      trimmed === '}' ||
+      trimmed === '};' ||
+      trimmed === '{' ||
+      trimmed === ')' ||
+      trimmed === '];' ||
+      trimmed === ']'
+    ) {
+      i++;
+      continue;
+    }
+
     // Module imports or includes
     if (
       trimmed.startsWith('import ') ||
@@ -3866,6 +3884,7 @@ function generateCodeExplanation(
     }
 
     // General algorithmic statement
+    const cleanStmt = trimmed.replace(/[{};]/g, '').trim();
     blocks.push({
       id: `blk-${lineNum}`,
       lineNumberLabel: `Line ${lineNum}`,
@@ -3874,9 +3893,13 @@ function generateCodeExplanation(
       roleTag: 'Algorithmic Statement',
       tagColor: 'purple',
       title: 'Execution Step',
-      explanation: `Executes core computational logic for ${cleanTitle}.`,
+      explanation: cleanStmt
+        ? `Executes algorithmic logic for ${cleanTitle}: ${cleanStmt}.`
+        : `Executes core computational logic for ${cleanTitle}.`,
       complexityImpact: 'O(1) Step',
-      spokenLecture: `Line ${lineNum} executes this algorithmic step.`,
+      spokenLecture: cleanStmt
+        ? `In line ${lineNum}, we execute ${cleanStmt.slice(0, 50)}.`
+        : `Line ${lineNum} executes computational logic for ${cleanTitle}.`,
     });
     i++;
   }
