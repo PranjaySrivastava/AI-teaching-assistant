@@ -404,7 +404,7 @@ Every response MUST be strictly valid JSON matching this exact schema:
         const tId = (t.id || '').toLowerCase();
         return (
           tTitle.includes(cleanTopic.toLowerCase()) ||
-          cleanTopic.toLowerCase().includes(tTitle.replace(/^\d+[\.\s-]*/, '')) ||
+          cleanTopic.toLowerCase().includes(tTitle.replace(/^\d+[.\s-]*/, '')) ||
           tId === (topicContext?.topicId || '').toLowerCase()
         );
       });
@@ -962,8 +962,64 @@ Every response MUST be strictly valid JSON matching this exact schema:
       };
     }
 
+    // Merge Two Sorted Lists & Linked List Merging
+    if (
+      q.includes('merge two sorted') ||
+      q.includes('merge 2 sorted') ||
+      (q.includes('merge') &&
+        (q.includes('linked list') || q.includes('listnode') || q.includes('pointer to the head')))
+    ) {
+      return {
+        explanation:
+          'To merge two sorted linked lists, we iterate through both lists using a dummy head node. At each step, we compare the current nodes of list A and list B, splice the smaller node onto our merged tail, and advance that pointer. Once one list is exhausted, we append the remainder of the other list in O(1). Time Complexity is O(n + m) and Auxiliary Space is O(1).',
+        mood: 'explaining',
+        code: {
+          language: 'python',
+          snippet: `class ListNode:\n    def __init__(self, val=0, next=None):\n        self.val = val\n        self.next = next\n\ndef merge_two_lists(l1: ListNode, l2: ListNode) -> ListNode:\n    dummy = ListNode(0)\n    tail = dummy\n    while l1 and l2:\n        if l1.val <= l2.val:\n            tail.next = l1\n            l1 = l1.next\n        else:\n            tail.next = l2\n            l2 = l2.next\n        tail = tail.next\n    tail.next = l1 if l1 else l2\n    return dummy.next`,
+        },
+        visualSequence: {
+          type: 'linked_list',
+          title: 'Merge Two Sorted Linked Lists',
+          steps: [
+            {
+              step: 1,
+              action: 'init',
+              description: 'Initialize dummy head and tail pointer',
+              elements: [0],
+            },
+            {
+              step: 2,
+              action: 'compare',
+              description: 'Compare l1.val and l2.val, attach smaller node to tail',
+              elements: [1],
+            },
+            {
+              step: 3,
+              action: 'splice',
+              description: 'Append remaining nodes and return dummy.next in O(n + m)',
+              elements: [2],
+            },
+          ],
+        },
+        suggestedFollowUps: [
+          'How does this differ from merging K sorted linked lists?',
+          'Can we merge the two lists recursively?',
+          'What is the space complexity if done recursively vs iteratively?',
+        ],
+        modelUsed: model,
+        fallbackMode: true,
+        ...(warning ? { warning } : {}),
+      };
+    }
+
     // Two Pointers & Sliding Window
-    if (q.includes('sliding window') || q.includes('two pointer') || q.includes('pointer')) {
+    if (
+      q.includes('sliding window') ||
+      q.includes('two pointer') ||
+      q.includes('two-pointer') ||
+      q.includes('window sum') ||
+      q.includes('window size')
+    ) {
       return {
         explanation:
           'The two pointers and sliding window techniques optimize nested O(n²) loops into linear O(n) by maintaining a valid window or bounding pointers that adjust monotonically based on constraints.',

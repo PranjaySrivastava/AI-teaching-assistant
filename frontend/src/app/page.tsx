@@ -234,6 +234,7 @@ interface TopicItem {
     timeComplexity?: any;
     spaceComplexity?: any;
     explanation?: string;
+    summary?: string;
   };
   visualScript?: {
     type?: string;
@@ -249,10 +250,17 @@ interface TopicItem {
 }
 
 function getTc(topic?: TopicItem): string {
-  if (!topic?.expectedAnswer?.timeComplexity) return 'O(N)';
+  if (!topic?.expectedAnswer?.timeComplexity) return 'O(n)';
   const tc = topic.expectedAnswer.timeComplexity;
-  if (typeof tc === 'string') return tc;
-  return tc.average || tc.worst || 'O(N)';
+  if (typeof tc === 'string') {
+    // If it was serialized as a stringified dict e.g. "{'best': ...}"
+    if (tc.startsWith('{')) {
+      const match = tc.match(/'(average|worst)'\s*:\s*'([^']+)'/);
+      if (match) return match[2];
+    }
+    return tc;
+  }
+  return tc.average || tc.worst || 'O(n)';
 }
 
 function getSc(topic?: TopicItem): string {
@@ -629,7 +637,20 @@ function getAlgorithmVisualization(topic: TopicItem): AlgorithmVisualModel {
   const tc = getTc(topic);
   const sc = getSc(topic);
   const summary =
-    topic.expectedAnswer?.explanation || 'Optimized state transitions across the input structure.';
+    topic.expectedAnswer?.summary ||
+    topic.expectedAnswer?.explanation ||
+    `Optimal state transitions and invariant tracking for ${cleanTitle}.`;
+
+  const scriptSteps = topic.visualScript?.steps;
+  const step1Desc =
+    scriptSteps?.[0]?.description ||
+    `Set up tracking variables and invariants. Target complexity: Time ${tc}, Space ${sc}.`;
+  const step2Desc =
+    scriptSteps?.[1]?.description ||
+    `Inspect elements and evaluate state transitions against target constraints.`;
+  const step3Desc =
+    scriptSteps?.[2]?.description ||
+    `State condition satisfied. Finalize optimal output with time ${tc} and space ${sc}.`;
 
   return {
     type: 'array_general',
@@ -639,35 +660,25 @@ function getAlgorithmVisualization(topic: TopicItem): AlgorithmVisualModel {
       {
         step: 1,
         action: `Initialize ${cleanTitle} State`,
-        description: `Set up tracking variables and invariants. Target complexity: Time ${tc}, Space ${sc}.`,
-        spokenLecture: `We begin the walkthrough for ${cleanTitle}. We set up our tracking pointers and invariant state to guarantee asymptotic time complexity of ${tc}.`,
+        description: step1Desc,
+        spokenLecture: `Let's walk through ${cleanTitle}. First, ${step1Desc.replace(/\{.*\}/g, tc)} Notice how we establish our initial invariant to guarantee asymptotic time complexity of ${tc}.`,
         pointerIndex: 0,
         currentVal: 7,
       },
       {
         step: 2,
-        action: 'Scan Elements & Evaluate Condition',
-        description: `Inspect element at index 1 (val: 1). Compare with previous state and evaluate transition: ${summary.slice(0, 80)}...`,
-        spokenLecture: `At index one, we evaluate the current element and update our running invariant according to the algorithm's optimal criteria.`,
-        pointerIndex: 1,
-        currentVal: 1,
-        highlightIndices: [0, 1],
+        action: 'Process Invariant Transitions',
+        description: step2Desc,
+        spokenLecture: `Moving to the next stage: ${step2Desc.replace(/\{.*\}/g, tc)} ${summary}`,
+        pointerIndex: 2,
+        currentVal: 5,
+        highlightIndices: [0, 2],
       },
       {
         step: 3,
-        action: 'Update Optimal State & Bounds',
-        description: `At index 4 (val: 6), invariant condition is satisfied. Update best result and advance window.`,
-        spokenLecture: `Scanning through the elements, at index four our invariant reaches an optimal threshold. We update our result variable and continue advancing.`,
-        pointerIndex: 4,
-        currentVal: 6,
-        highlightIndices: [1, 4],
-        found: true,
-      },
-      {
-        step: 4,
         action: 'Finalize & Return Result',
-        description: `All elements evaluated in one pass. Return computed result with optimal time ${tc} and space ${sc}.`,
-        spokenLecture: `All elements have been processed in a single pass. The algorithm returns the verified optimal result, achieving time complexity of ${tc} and space ${sc}.`,
+        description: step3Desc,
+        spokenLecture: `Finally: ${step3Desc.replace(/\{.*\}/g, tc)} The algorithm concludes successfully, achieving optimal execution in ${tc} time and ${sc} auxiliary memory.`,
         pointerIndex: 5,
         currentVal: 4,
         found: true,
@@ -749,9 +760,14 @@ export default function Home() {
   // Speech Helper (TTS with ElevenLabs Cloud Neural Voice + Web Speech Fallback)
   const speakText = useCallback(
     async (textToSpeak: string, onEnd?: () => void) => {
-      if (!isTtsEnabled || typeof window === 'undefined') {
+      if (typeof window === 'undefined') {
         onEnd?.();
         return;
+      }
+
+      // If user directly triggers speech while muted, automatically un-mute
+      if (!isTtsEnabled) {
+        setIsTtsEnabled(true);
       }
 
       // Stop any prior speech or audio playback
@@ -833,7 +849,9 @@ export default function Home() {
 
       // 1. ElevenLabs Cloud Neural Voice (Permanent Voice ID: ZBagl2bR5Xv44f5Xpxn6)
       try {
-        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5001';
+        const backendUrl =
+          process.env.NEXT_PUBLIC_BACKEND_URL ||
+          'https://ai-teaching-assistant-backend-service.onrender.com';
         const ttsRes = await fetch(`${backendUrl}/api/tts`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -886,6 +904,44 @@ export default function Home() {
     [isTtsEnabled, playbackSpeed]
   );
 
+  // Master Voice Toggle: Instantly Silence Audio when Muted & Play Confirmation when Enabled
+  const handleToggleVoice = useCallback(() => {
+    setIsTtsEnabled((prev) => {
+      const nextState = !prev;
+      if (!nextState) {
+        // User switched to MUTED: immediately cancel all ongoing speech and audio
+        if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+          window.speechSynthesis.cancel();
+        }
+        if (activeAudioRef.current) {
+          activeAudioRef.current.pause();
+          activeAudioRef.current = null;
+        }
+        setIsSpeaking(false);
+        setSpokenText('');
+        setSentiment('idle');
+      } else {
+        // User switched to VOICE ON: play audible confirmation
+        if (typeof window !== 'undefined') {
+          if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance('Voice output enabled');
+            utterance.rate = 1.05;
+            utterance.onend = () => {
+              setIsSpeaking(false);
+              setSentiment('idle');
+            };
+            window.speechSynthesis.speak(utterance);
+          }
+          setSpokenText('Voice output enabled.');
+          setIsSpeaking(true);
+          setSentiment('explaining');
+        }
+      }
+      return nextState;
+    });
+  }, []);
+
   // Sync isPlayingVis ref for async callbacks
   const isPlayingVisRef = useRef<boolean>(isPlayingVis);
   useEffect(() => {
@@ -937,7 +993,10 @@ export default function Home() {
   // Sync Code Text when topic or language changes
   useEffect(() => {
     if (selectedTopic?.codeReferences) {
-      setCodeText(selectedTopic.codeReferences[codeLang] || '# No code available');
+      let rawCode = selectedTopic.codeReferences[codeLang] || '# No code available';
+      const tc = getTc(selectedTopic);
+      rawCode = rawCode.replace(/Time Complexity:\s*\{[^}]*\}/g, `Time Complexity: ${tc}`);
+      setCodeText(rawCode);
       setRunOutput(null);
       setCurrentStepIdx(0);
       setIsPlayingVis(false);
@@ -1001,7 +1060,9 @@ export default function Home() {
     setSentiment('thinking');
 
     try {
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5001';
+      const backendUrl =
+        process.env.NEXT_PUBLIC_BACKEND_URL ||
+        'https://ai-teaching-assistant-backend-service.onrender.com';
       let assistantText = '';
       let codeSnippet: { language: string; snippet: string } | null = null;
       let mood: Sentiment = 'explaining';
@@ -1135,6 +1196,26 @@ export default function Home() {
           ];
           mood = 'explaining';
         }
+        // 7. Merge Two Sorted Lists / Linked Lists
+        else if (
+          qLower.includes('merge two sorted') ||
+          qLower.includes('merge 2 sorted') ||
+          (qLower.includes('merge') &&
+            (qLower.includes('linked list') || qLower.includes('pointer to the head')))
+        ) {
+          assistantText =
+            '**Merge Two Sorted Lists**: We use a dummy head node and a pointer `tail` to iteratively append the node with the smaller value from either list A or list B. When one list is exhausted, we append the remaining elements of the other list in O(1). Time Complexity is **O(n + m)** and Auxiliary Space is **O(1)**.';
+          codeSnippet = {
+            language: 'python',
+            snippet:
+              'class ListNode:\n    def __init__(self, val=0, next=None):\n        self.val = val\n        self.next = next\n\ndef merge_two_lists(l1: ListNode, l2: ListNode) -> ListNode:\n    dummy = ListNode(0)\n    tail = dummy\n    while l1 and l2:\n        if l1.val <= l2.val:\n            tail.next = l1\n            l1 = l1.next\n        else:\n            tail.next = l2\n            l2 = l2.next\n        tail = tail.next\n    tail.next = l1 if l1 else l2\n    return dummy.next',
+          };
+          followUps = [
+            'How do you merge K sorted linked lists in O(N log k)?',
+            'Can we implement this recursively?',
+          ];
+          mood = 'explaining';
+        }
         // Generic fallback for any other question
         else {
           assistantText = `Regarding **"${query}"**: This is a classic question in data structures and algorithmic design. The key is to analyze the underlying state invariant, evaluate the temporal bound O(n) or O(log n), and select the most optimal auxiliary memory structure.`;
@@ -1265,7 +1346,9 @@ export default function Home() {
     setSentiment('thinking');
 
     try {
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5001';
+      const backendUrl =
+        process.env.NEXT_PUBLIC_BACKEND_URL ||
+        'https://ai-teaching-assistant-backend-service.onrender.com';
       let assistantText = '';
       let mood: Sentiment = 'explaining';
 
@@ -1410,7 +1493,9 @@ export default function Home() {
       setIsRecording(true);
       setSentiment('thinking');
       try {
-        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5001';
+        const backendUrl =
+          process.env.NEXT_PUBLIC_BACKEND_URL ||
+          'https://ai-teaching-assistant-backend-service.onrender.com';
         await assemblyAiStream.start(backendUrl, {
           onPartialTranscript: (text: string) => {
             if (currentPage === 'qa') {
@@ -1650,18 +1735,23 @@ export default function Home() {
             {/* TTS Toggle */}
             <button
               type="button"
-              onClick={() => setIsTtsEnabled(!isTtsEnabled)}
-              className={`p-2 rounded-lg border text-xs flex items-center gap-1.5 transition-all ${
+              id="voice-toggle-btn"
+              onClick={handleToggleVoice}
+              className={`p-2 rounded-lg border text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
                 isTtsEnabled
-                  ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30'
-                  : 'bg-slate-900 text-slate-500 border-slate-800 hover:text-slate-300'
+                  ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30 hover:bg-cyan-500/20'
+                  : 'bg-slate-900 text-slate-500 border-slate-800 hover:text-slate-300 hover:border-slate-700'
               }`}
-              title={isTtsEnabled ? 'AI Speech is Enabled' : 'AI Speech is Muted'}
+              title={
+                isTtsEnabled
+                  ? 'AI Speech is Enabled (Click to Mute)'
+                  : 'AI Speech is Muted (Click to Enable)'
+              }
             >
               {isTtsEnabled ? (
-                <Volume2 className="w-3.5 h-3.5" />
+                <Volume2 className="w-3.5 h-3.5 text-cyan-400" />
               ) : (
-                <VolumeX className="w-3.5 h-3.5" />
+                <VolumeX className="w-3.5 h-3.5 text-slate-400" />
               )}
               <span className="hidden md:inline text-[11px] font-medium">
                 {isTtsEnabled ? 'Voice ON' : 'Muted'}
