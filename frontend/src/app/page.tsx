@@ -1288,20 +1288,21 @@ export default function Home() {
         if (res.ok) {
           const data = await res.json();
           let exp = data.explanation || data.answer || '';
-          // If backend returned the generic out-of-scope deflection while we are in
-          // Code Lab (selectedTopic is set), ignore it and fall through to local fallback
-          const isOutOfScopeDeflection =
+          // If backend returned generic deflection or generic concept placeholder while in Code Lab,
+          // ignore it and use our rich, topic-specific contextual generator
+          const isGenericPlaceholder =
             exp.includes('specialized in Data Structures') ||
             exp.includes('specialize in Data Structures') ||
             exp.includes('Data Structures & Algorithms') ||
-            exp.includes("Let's focus our study on topics like Sorting");
-          if (!isOutOfScopeDeflection) {
+            exp.includes("Let's focus our study on topics like Sorting") ||
+            exp.includes('Let us break down this concept! In computer science');
+          if (!isGenericPlaceholder) {
             if (data.code?.snippet) {
               exp += `\n\n\`\`\`${data.code.language || 'python'}\n${data.code.snippet}\n\`\`\``;
             }
             assistantText = exp;
           }
-          if (data.mood && !isOutOfScopeDeflection) mood = data.mood;
+          if (data.mood && !isGenericPlaceholder) mood = data.mood;
         }
       } catch {
         // Backend offline or timeout -> use rich contextual pedagogical assistant engine
@@ -1412,14 +1413,23 @@ export default function Home() {
         const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5001';
         await assemblyAiStream.start(backendUrl, {
           onPartialTranscript: (text: string) => {
-            setChatInput(text);
+            if (currentPage === 'qa') {
+              setQaInput(text);
+            } else {
+              setChatInput(text);
+            }
           },
           onFinalTranscript: (text: string) => {
             if (text.trim()) {
-              setChatInput(text);
               assemblyAiStream.stop();
               setIsRecording(false);
-              handleSendMessage(text);
+              if (currentPage === 'qa') {
+                setQaInput(text);
+                handleSendQa(text);
+              } else {
+                setChatInput(text);
+                handleSendMessage(text);
+              }
             }
           },
           onError: () => {
@@ -1442,10 +1452,18 @@ export default function Home() {
             const transcript = Array.from(ev.results)
               .map((r: any) => r[0].transcript)
               .join('');
-            setChatInput(transcript);
+            if (currentPage === 'qa') {
+              setQaInput(transcript);
+            } else {
+              setChatInput(transcript);
+            }
             if (ev.results[0].isFinal) {
               setIsRecording(false);
-              handleSendMessage(transcript);
+              if (currentPage === 'qa') {
+                handleSendQa(transcript);
+              } else {
+                handleSendMessage(transcript);
+              }
             }
           };
           recognizer.onerror = () => setIsRecording(false);
@@ -1607,7 +1625,12 @@ export default function Home() {
               <input
                 type="text"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  if (e.target.value.trim() && currentPage !== 'modules') {
+                    setCurrentPage('modules');
+                  }
+                }}
                 placeholder="Search 180+ problems..."
                 className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-slate-900/90 border border-slate-800 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/60 focus:ring-1 focus:ring-cyan-500/20 transition-all"
               />

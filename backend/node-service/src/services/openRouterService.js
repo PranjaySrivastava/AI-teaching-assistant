@@ -5,6 +5,7 @@
  */
 
 const fs = require('fs');
+const path = require('path');
 const config = require('../config');
 
 class OpenRouterService {
@@ -20,6 +21,26 @@ class OpenRouterService {
     this.availableModels = config.openRouter.availableModels;
     this.systemPrompt = this.loadSystemPrompt();
     this.fewShotExamples = this.loadFewShotExamples();
+    this.curriculum = this.loadCurriculumDatabase();
+  }
+
+  loadCurriculumDatabase() {
+    try {
+      const candidates = [
+        path.resolve(__dirname, '../../../../content/qa-database/qa-dataset.json'),
+        path.resolve(__dirname, '../../../../frontend/src/data/topics.json'),
+        path.resolve(__dirname, '../../../content/qa-database/qa-dataset.json'),
+      ];
+      for (const p of candidates) {
+        if (fs.existsSync(p)) {
+          const raw = JSON.parse(fs.readFileSync(p, 'utf-8'));
+          return Array.isArray(raw) ? raw : raw.topics || [];
+        }
+      }
+    } catch (_err) {
+      // Fall through to empty list
+    }
+    return [];
   }
 
   loadFewShotExamples() {
@@ -366,14 +387,38 @@ Every response MUST be strictly valid JSON matching this exact schema:
           ...(warning ? { warning } : {}),
         };
       }
+    }
 
-      // Generic Code Lab catch-all: if topic is set but no specific match above,
-      // give a contextual answer about the current topic
+    // Generic Code Lab catch-all: if topic is set but not Two Sum,
+    // give a rich, contextual answer about that specific algorithm!
+    if (isCodeLab) {
       const topicTitle = topicContext?.topicTitle || 'this algorithm';
       const cleanTopic = topicTitle
         .replace(/^\d+\.?\s*/, '')
         .replace(/\s*\(.*?\)/, '')
         .trim();
+
+      // Look up topic in curriculum
+      const matched = this.curriculum.find((t) => {
+        const tTitle = (t.title || '').toLowerCase();
+        const tId = (t.id || '').toLowerCase();
+        return (
+          tTitle.includes(cleanTopic.toLowerCase()) ||
+          cleanTopic.toLowerCase().includes(tTitle.replace(/^\d+[\.\s-]*/, '')) ||
+          tId === (topicContext?.topicId || '').toLowerCase()
+        );
+      });
+
+      const tc =
+        matched?.expectedAnswer?.timeComplexity?.worst ||
+        matched?.expectedAnswer?.timeComplexity?.average ||
+        matched?.expectedAnswer?.timeComplexity ||
+        'O(n)';
+      const sc = matched?.expectedAnswer?.spaceComplexity || 'O(1)';
+      const summary =
+        matched?.expectedAnswer?.summary ||
+        `Optimal algorithmic design for ${cleanTopic}, balancing execution time and auxiliary space.`;
+
       if (
         q.includes('intuition') ||
         q.includes('explain') ||
@@ -383,11 +428,11 @@ Every response MUST be strictly valid JSON matching this exact schema:
         q.includes('approach')
       ) {
         return {
-          explanation: `The core intuition for **${cleanTopic}** is to reduce time complexity from brute-force O(n²) by using an efficient data structure — such as a hash map, sorted array, or monotonic stack — to achieve constant-time lookups. This converts a nested search into a single linear pass.`,
+          explanation: `The core intuition for **${cleanTopic}**: ${summary} It achieves optimal time complexity of **${tc}** and auxiliary space of **${sc}**.`,
           mood: 'explaining',
           code: {
             language: 'python',
-            snippet: `# ${cleanTopic}: efficient approach\n# Use auxiliary data structure for O(1) lookups\nresult = []\nseen = {}\n# Traverse input once, O(n) total`,
+            snippet: `# ${cleanTopic} optimal approach\n# Time Complexity: ${tc} | Space: ${sc}\n# Traverses input while maintaining state invariants systematically.`,
           },
           suggestedFollowUps: [
             `What is the time complexity of ${cleanTopic}?`,
@@ -407,11 +452,11 @@ Every response MUST be strictly valid JSON matching this exact schema:
         q.includes('analyz')
       ) {
         return {
-          explanation: `For **${cleanTopic}**: Time Complexity is typically **O(n)** with a hash map or sorted structure, compared to O(n²) brute force. Space Complexity is **O(n)** for auxiliary storage. The single-pass approach is the key to achieving optimal performance.`,
+          explanation: `For **${cleanTopic}**:\n• **Time Complexity**: **${tc}** because the algorithm divides or processes the search space optimally without redundant iterations.\n• **Space Complexity**: **${sc}** for pointers or auxiliary state.`,
           mood: 'explaining',
           code: {
             language: 'python',
-            snippet: `# Time: O(n) - single pass\n# Space: O(n) - hash map storage`,
+            snippet: `# Time Complexity: ${tc}\n# Auxiliary Space: ${sc}`,
           },
           suggestedFollowUps: [
             `Explain the intuition for ${cleanTopic}`,
@@ -424,7 +469,7 @@ Every response MUST be strictly valid JSON matching this exact schema:
       }
       if (q.includes('edge') || q.includes('case') || q.includes('key')) {
         return {
-          explanation: `Key edge cases for **${cleanTopic}**:\n1. Empty or single-element inputs.\n2. Duplicate values (e.g. two identical numbers).\n3. Negative numbers and zeros.\n4. No valid answer exists (should return empty or -1).\n5. Maximum constraint inputs for performance testing.`,
+          explanation: `Key edge cases for **${cleanTopic}**:\n1. Empty input or single-element boundary.\n2. Target element located at extreme boundaries (first or last position).\n3. Target not present in the input collection.\n4. Duplicates or negative numerical values.\n5. Overflow conditions when computing middle indices.`,
           mood: 'thinking',
           suggestedFollowUps: [
             `Explain the intuition for ${cleanTopic}`,
@@ -437,7 +482,7 @@ Every response MUST be strictly valid JSON matching this exact schema:
       }
       if (q.includes('example') || q.includes('walk') || q.includes('step')) {
         return {
-          explanation: `Step-by-step walkthrough for **${cleanTopic}**:\n• Initialize auxiliary data structure (hash map / set).\n• Traverse input left to right.\n• At each element, check if complement or required value exists in structure.\n• If yes → return result. If no → store current element and continue.`,
+          explanation: `Step-by-step walkthrough for **${cleanTopic}**:\n• Initialize boundary pointers or auxiliary tracking state.\n• Evaluate the current midpoint or element against condition.\n• Shrink or update active search window based on evaluation.\n• Terminate when condition is met in **${tc}** iterations.`,
           mood: 'celebrating',
           suggestedFollowUps: [
             `Explain the intuition for ${cleanTopic}`,
@@ -450,11 +495,11 @@ Every response MUST be strictly valid JSON matching this exact schema:
       }
       // General Code Lab fallback for any other query
       return {
-        explanation: `Great question about **${cleanTopic}**! This problem uses an efficient data structure to transform brute-force O(n²) into an optimal O(n) solution. Check the code in the editor and step through the visualizer to see each operation!`,
+        explanation: `Great question about **${cleanTopic}**! ${summary} Target complexity: **${tc}** time and **${sc}** space. Check the code in the editor and step through the visualizer to see each operation!`,
         mood: 'encouraging',
         code: {
           language: 'python',
-          snippet: `# ${cleanTopic}: O(n) optimal solution\nseen = {}\nfor i, val in enumerate(nums):\n    complement = target - val\n    if complement in seen:\n        return [seen[complement], i]\n    seen[val] = i`,
+          snippet: `# ${cleanTopic}: optimal solution\n# Time: ${tc} | Space: ${sc}`,
         },
         suggestedFollowUps: [
           `Explain the intuition for ${cleanTopic}`,
